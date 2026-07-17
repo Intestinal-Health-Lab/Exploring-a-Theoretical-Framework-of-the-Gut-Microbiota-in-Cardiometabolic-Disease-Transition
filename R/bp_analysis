@@ -1,0 +1,2029 @@
+---
+title: "drivers_baseline_bp_analysis"
+author: "SDW"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries, warning=FALSE, message=FALSE, echo=FALSE}
+# Load necessary libraries
+library(tidyverse)
+library(MicrobiomeAnalystR)
+library(ecodist)
+library(Cairo)
+library(ANCOMBC)
+library(metagenomeSeq)
+library(corncob)
+library(DESeq2)
+```
+
+```{r copy bp input files, warning=FALSE, message=FALSE}
+#copy bp feature/taxa table from file handling directory
+file.copy(
+  "../../drivers_baseline_file_handling/output_files/ft_tax_merged_bp.csv", 
+  "../input_files/ft_tax_merged_bp.csv",
+  overwrite = FALSE)
+
+#copy bp metadata from file handling directory
+file.copy(
+  "../../drivers_baseline_file_handling/output_files/bp_meta_baseline.csv", 
+  "../input_files/bp_meta_baseline.csv",
+  overwrite = FALSE)
+```
+
+```{r create phyloseq object, warning=FALSE, message=FALSE}
+# Initiate the mbSetObj
+mbSet<-Init.mbSetObj()
+
+# Set the analysis type
+mbSet<-SetModuleType(mbSet, "mdp")
+
+# Read in the feature/taxonomy table
+mbSet<-Read16SAbundData(mbSet, 
+                        dataName="../input_files/ft_tax_merged_bp.csv", 
+                        format="text",
+                        taxa_type="SILVA", 
+                        ismetafile="F", 
+                        is.normalized = "F")
+
+# Read in the metadata file
+mbSet<-ReadSampleTable(mbSet, "../input_files/bp_meta_baseline.csv")
+
+# Data integrity check
+mbSet<-SanityCheckData(mbSet, filetype="text")
+
+# Create phyloseq object
+mbSet<-CreatePhyloseqObj(mbSet, type="text", 
+                         taxa_type="SILVA", 
+                         taxalabel="T", 
+                         isNormInput = FALSE)
+```
+
+```{r low abundance filtering, warning=FALSE, message=FALSE}
+# Low abundance filtering, based on the prevalence of features. In this case, by setting the sample percentage to 0.1, only features with >4 counts in at least 10% of all samples will be retained.
+mbSet<-ApplyAbundanceFilter(mbSet, 
+                            filt.opt="prevalence", 
+                            count=4, 
+                            smpl.perc=0.1)
+```
+
+```{r total sum scaling, warning=FALSE, message=FALSE}
+#Normalization with no rarefying, total sum scaling and no transformation
+mbSet<-PerformNormalization(mbSet, 
+                            rare.opt="none", 
+                            scale.opt="colsum", 
+                            transform.opt="none")
+```
+
+```{r observed taxa bar plots phylum, warning=FALSE, message=FALSE}
+# Create taxa bar plots for observed abundance phylum level
+# label output with _observed_phylum_bp
+# move to output_files/abundance
+mbSet<-PlotTaxaAundanceBar(mbSet, 
+                      "../output_files/abundance/taxa_abund_observed_phylum_bp",
+                      "Phylum","bp_cat", "null", "barraw",10, "set3", "sum",
+                      10, "bottom", "F", "png")
+```
+
+```{r observed taxa bar plot genus, warning=FALSE, message=FALSE}
+# Create taxa bar plots for observed abundance genus level
+# label output with _observed_genus_bp 
+# move to output_files/abundance
+mbSet<-PlotTaxaAundanceBar(mbSet, 
+                      "../output_files/abundance/taxa_abund_observed_genus_bp",
+                      "Genus","bp_cat", "none", "barraw",10, "set3","sum",
+                      10, "bottom", "F", "png")
+```
+
+```{r relative taxa bar plot phylum, warning=FALSE, message=FALSE}
+# Create taxa bar plots for relative abundance phylum level
+# label output with _relative_phylum_bp
+# move to output_files/abundance
+mbSet<-PlotTaxaAundanceBar(mbSet,
+                           "../output_files/abundance/taxa_abund_relative_phylum_bp",
+                           "Phylum","bp_cat", "none", "barnorm",10, "set3","sum",
+                           10, "bottom", "F", "png")
+```
+
+```{r relative taxa bar plot genus, warning=FALSE, message=FALSE}
+# Create taxa bar plots for relative abundance genus level
+# label output with _relative_genus_bp
+# move to output_files/abundance
+mbSet<-PlotTaxaAundanceBar(mbSet,
+                      "../output_files/abundance/taxa_abund_relative_genus_bp",
+                      "Genus","bp_cat", "none", "barnorm",10, "set3","sum",
+                      10, "bottom", "F", "png")
+```
+
+```{r alpha diversity phylum level, warning=FALSE, message=FALSE}
+# phylum level alpha diversity measure via Shannons diveristy index
+# rename outputs from PerformAlphaDiversityComp with _shannons_phylum_bp
+# move to output_files/alphadiversity
+mbSet<-PlotAlphaData(mbSet, 
+                     "filt","../output_files/alphadiversity/alpha_diver_shannons_phylum_bp",
+                     "Shannon","bp_cat","Phylum", "default", "png");
+mbSet<-PlotAlphaBoxData(mbSet, 
+                        "../output_files/alphadiversity/alpha_diverbox_shannons_phylum_bp",
+                        "Shannon","bp_cat","default", "png");
+mbSet<-PerformAlphaDiversityComp(mbSet, 
+                                 "nonpar","bp_cat","true");
+ad_phy_bp_sig <- mbSet[["analSet"]][["alpha.stat.info"]];
+ad_phy_bp_sig_df <- as.data.frame(ad_phy_bp_sig);
+write_csv(ad_phy_bp_sig_df, 
+          "../output_files/alphadiversity/ad_phy_bp_sig_shannons.csv")
+```
+
+```{r alpha diversity genus level, warning=FALSE, message=FALSE}
+# genus level alpha diversity measured via Shannons diveristy index
+# rename outputs from PerformAlphaDiversityComp with _shannons_genus_bp
+# move to output_files/alphadiversity
+mbSet<-PlotAlphaData(mbSet, 
+                     "filt","../output_files/alphadiversity/alpha_diver_shannons_genus_bp",
+                     "Shannon","bp_cat","Genus", "default", "png");
+mbSet<-PlotAlphaBoxData(mbSet, 
+                        "../output_files/alphadiversity/alpha_diverbox_shannons_genus_bp",
+                        "Shannon","bp_cat","default", "png");
+mbSet<-PerformAlphaDiversityComp(mbSet, 
+                                 "nonpar","bp_cat","true");
+ad_gen_bp_sig <- mbSet[["analSet"]][["alpha.stat.info"]];
+ad_gen_bp_sig_df <- as.data.frame(ad_gen_bp_sig);
+write_csv(ad_gen_bp_sig_df, 
+          "../output_files/alphadiversity/ad_gen_bp_sig_shannons.csv")
+```
+
+```{r alpha diversity phylum level, warning=FALSE, message=FALSE}
+# phylum level alpha diversity measure via chao1 diveristy index
+# rename outputs from PerformAlphaDiversityComp with _chao1_phylum_bp
+# move to output_files/alphadiversity
+mbSet<-PlotAlphaData(mbSet, 
+                     "filt","../output_files/alphadiversity/alpha_diver_chao1_phylum_bp",
+                     "Chao1","bp_cat","Phylum", "default", "png");
+mbSet<-PlotAlphaBoxData(mbSet, 
+                        "../output_files/alphadiversity/alpha_diverbox_chao1_phylum_bp",
+                        "Chao1","bp_cat","default", "png");
+mbSet<-PerformAlphaDiversityComp(mbSet, 
+                                 "nonpar","bp_cat","true");
+ad_phy_bp_sig <- mbSet[["analSet"]][["alpha.stat.info"]];
+ad_phy_bp_sig_df <- as.data.frame(ad_phy_bp_sig);
+write_csv(ad_phy_bp_sig_df, 
+          "../output_files/alphadiversity/ad_phy_bp_sig_chao1.csv")
+```
+
+```{r alpha diversity genus level, warning=FALSE, message=FALSE}
+# genus level alpha diversity measured via chao1 diveristy index
+# rename outputs from PerformAlphaDiversityComp with _chao1_genus_bp
+# move to output_files/alphadiversity
+mbSet<-PlotAlphaData(mbSet, 
+                     "filt","../output_files/alphadiversity/alpha_diver_chao1_genus_bp",
+                     "Chao1","bp_cat","Genus", "default", "png");
+mbSet<-PlotAlphaBoxData(mbSet, 
+                        "../output_files/alphadiversity/alpha_diverbox_chao1_genus_bp",
+                        "Chao1","bp_cat","default", "png");
+mbSet<-PerformAlphaDiversityComp(mbSet, 
+                                 "nonpar","bp_cat","true");
+ad_gen_bp_sig <- mbSet[["analSet"]][["alpha.stat.info"]];
+ad_gen_bp_sig_df <- as.data.frame(ad_gen_bp_sig);
+write_csv(ad_gen_bp_sig_df, 
+          "../output_files/alphadiversity/ad_gen_bp_sig_chao1.csv")
+```
+
+```{r beta diversity phylum level, warning=FALSE, message=FALSE}
+# phylum level beta diversity measured via Bray Curtis Diversity index permanova
+#rename outputs from PerformCategoryComp with _beta_diver_phylum_bp
+# move from code file to output_files/betadiversity
+set.seed(123)
+mbSet<-PerformBetaDiversity(mbSet,
+                            "../output_files/betadiversity/beta_diver_phylum_bp",
+                            "PCoA","bray","expfac","bp_cat","none","Phylum",
+                            "", "Shannon", "yes", "adonis", "png", 72, 
+                            "default", "true");
+mbSet<-PerformBetaDiversity(mbSet,
+                            "../output_files/betadiversity/beta_diver_phylum_bp_no_ellipse",
+                            "PCoA","bray","expfac","bp_cat","none","Phylum",
+                            "", "Shannon", "no", "adonis", "png", 72, 
+                            "default", "true");
+mbSet<-PCoA3D.Anal(mbSet, 
+                   "PCoA","bray","Phylum","expfac","bp_cat", "","Shannon",
+                   "../output_files/betadiversity/beta_diver3d_phylum_bp.json");
+mbSet<-PerformCategoryComp(mbSet, 
+                           "Phylum", "adonis","bray","bp_cat","true")
+mbSet[["analSet"]][["stat.info.vec"]];
+bd_phy_bp_sig<-mbSet[["analSet"]][["stat.info.vec"]];
+bd_phy_bp_sig_df <- as.data.frame(bd_phy_bp_sig);
+bd_phy_bp_sig_df$row.names <- rownames(bd_phy_bp_sig_df);
+write_csv(bd_phy_bp_sig_df, 
+          "../output_files/betadiversity/beta_diver_phylum_bp_sig.csv");
+```
+
+```{r beta diversity genus level, warning=FALSE, message=FALSE}
+# genus level beta diversity measured via Bray Curtis Diversity index permanova
+#rename outputs from PerformCategoryComp with _beta_diver_genus_bp
+# move from code file to output_files/betadiversity
+set.seed(123)
+mbSet<-PerformBetaDiversity(mbSet, 
+                            "../output_files/betadiversity/beta_diver_genus_bp",
+                            "PCoA","bray","expfac","bp_cat","none","Genus","","Shannon",
+                            "yes", "adonis", "png", 72, "default", "true");
+mbSet<-PerformBetaDiversity(mbSet, 
+                            "../output_files/betadiversity/beta_diver_genus_bp_no_ellipse",
+                            "PCoA","bray","expfac","bp_cat","none","Genus","","Shannon",
+                            "no", "adonis", "png", 72, "default", "true");
+mbSet<-PCoA3D.Anal(mbSet, 
+                   "PCoA","bray","Genus","expfac","bp_cat","","Shannon",
+                   "../output_files/betadiversity/beta_diver3d_genus_bp.json");
+mbSet<-PerformCategoryComp(mbSet, 
+                           "Genus", "adonis","bray","bp_cat","true")
+mbSet[["analSet"]][["stat.info.vec"]];
+bd_gen_bp_sig<-mbSet[["analSet"]][["stat.info.vec"]];
+bd_gen_bp_sig_df <- as.data.frame(bd_gen_bp_sig);
+bd_gen_bp_sig_df$row.names <- rownames(bd_gen_bp_sig_df);
+write_csv(bd_gen_bp_sig_df, 
+          "../output_files/betadiversity/beta_diver_genus_bp_sig.csv")
+```
+
+```{r beta diversity permdisp phylum level, warning=FALSE, message=FALSE}
+# phylum level beta diversity measured via Bray Curtis Diversity index permdisp
+#rename outputs from PerformCategoryComp with _permdisp_phylum_bp
+# move from code file to output_files/betadiversity
+set.seed(123)
+mbSet<-PerformBetaDiversity(mbSet, 
+                            "../output_files/betadiversity/beta_diver_permdisp_phylum_bp",
+                            "PCoA","bray","expfac","bp_cat",
+                            "none","Phylum","", "Shannon", 
+                            "yes", "permdisp", "png", 
+                            72, "default", "false");
+mbSet<-PerformBetaDiversity(mbSet, 
+                            "../output_files/betadiversity/beta_diver_permdisp_phylum_bp_no_ellipse",
+                            "PCoA","bray","expfac","bp_cat",
+                            "none","Phylum","", "Shannon", 
+                            "no", "permdisp", "png", 
+                            72, "default", "false");
+mbSet<-PCoA3D.Anal(mbSet, 
+                   "PCoA","bray","Phylum", "expfac",
+                   "bp_cat", "","Shannon",
+                   "../output_files/betadiversity/beta_diver3d_permdisp_phylum_bp.json");
+mbSet<-PerformCategoryComp(mbSet, 
+                           "Phylum", "permdisp","bray","bp_cat","false")
+mbSet[["analSet"]][["stat.info.vec"]];
+bd_phy_bp_sig_permdisp<-mbSet[["analSet"]][["stat.info.vec"]];
+bd_phy_bp_sig_permdisp_df <- as.data.frame(bd_phy_bp_sig_permdisp);
+bd_phy_bp_sig_permdisp_df$row.names <- rownames(bd_phy_bp_sig_permdisp_df);
+write_csv(bd_phy_bp_sig_permdisp_df, 
+          "../output_files/betadiversity/beta_diver_phylum_bp_sig_permdisp.csv")
+```
+
+```{r beta diversity permdisp genus level, warning=FALSE, message=FALSE}
+# genus level beta diversity measured via Bray Curtis Diversity index permdisp
+# rename outputs from PerformCategoryComp with _permdisp_genus_bp
+# move from code file to output_files/betadiversity
+set.seed(123)
+mbSet<-PerformBetaDiversity(mbSet,
+                        "../output_files/betadiversity/beta_diver_permdisp_genus_bp",
+                        "PCoA","bray","expfac","bp_cat","none","Genus","","Shannon", 
+                        "yes", "permdisp", "png", 72, "default", "false");
+mbSet<-PerformBetaDiversity(mbSet,
+                        "../output_files/betadiversity/beta_diver_permdisp_genus_bp_no_ellipse",
+                        "PCoA","bray","expfac","bp_cat","none","Genus","","Shannon", 
+                        "no", "permdisp", "png", 72, "default", "false");
+mbSet<-PCoA3D.Anal(mbSet, 
+                   "PCoA","bray","Genus","expfac","bp_cat","","Shannon",
+                   "../output_files/betadiversity/beta_diver3d_permdisp_genus_bp.json");
+mbSet<-PerformCategoryComp(mbSet, 
+                           "Genus", "permdisp","bray","bp_cat","false")
+mbSet[["analSet"]][["stat.info.vec"]];
+bd_gen_bp_sig_permdisp<-mbSet[["analSet"]][["stat.info.vec"]];
+bd_gen_bp_sig_permdisp_df <- as.data.frame(bd_gen_bp_sig_permdisp);
+bd_gen_bp_sig_permdisp_df$row.names <- rownames(bd_gen_bp_sig_permdisp_df);
+write_csv(bd_gen_bp_sig_permdisp_df, 
+          "../output_files/betadiversity/beta_diver_genus_bp_sig_permdisp.csv")
+```
+
+```{r pull processed taxonomy from MicrobiomeAnalystR, warning=FALSE, message=FALSE}
+##############################################################################
+# pull processed data from MicrobiomeAnalystR 
+# singletons removed, filtering performed, not normalized
+##############################################################################
+
+# Extract OTU table and convert to a data frame with taxa as a column
+# feature level for differential abundance analysis
+filtered_tax <- mbSet[["dataSet"]][["filt.data"]] %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "taxa") %>%
+  t() %>%
+  as.data.frame() %>%
+  setNames(.[1, ])
+  
+filtered_tax <- filtered_tax[-1, ] %>%
+  rownames_to_column("SampleID") 
+
+write_csv(filtered_tax, "../input_files/filtered_tax_table.csv")
+
+# create a feature level object with all taxonomy combined for downstream visualizations post differential abundance analysis
+# Extract OTU table and convert to a data frame with taxa as a column
+filtered_tax2 <- mbSet[["dataSet"]][["filt.data"]] %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "taxa")
+  
+# Extract taxonomy table and convert to a data frame with taxa as a column
+tax <- mbSet[["dataSet"]][["proc.phyobj"]]@tax_table %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "taxa")
+
+# Merge OTU table and taxonomy table, then create a full taxonomy column
+filtered_tax_all <- inner_join(filtered_tax2, tax, by = "taxa") %>%
+  as.data.frame() %>%
+  select(taxa,Phylum,Class,Order,Family,Genus,Species,everything())
+
+write_csv(filtered_tax_all, "../input_files/filtered_tax_table_all.csv")
+```
+
+```{r read tsv tables, warning=FALSE, message=FALSE}
+#read feature table for differential abundance 
+bp_ft_table_filtered <- read.table("../input_files/filtered_tax_table.tsv",
+                         header = TRUE, 
+                         sep = "\t",
+                         row.names = 1,
+                         stringsAsFactors = FALSE) %>%
+  rownames_to_column("sample_id") %>%
+  mutate(sample_id = gsub("-", ".", sample_id)) %>%
+  column_to_rownames("sample_id")
+
+# Read in the metadata file for differential abundance 
+bp_meta <-read.table("../input_files/bp_meta_baseline.tsv", 
+                         header = TRUE, 
+                         sep = "\t",
+                         row.names = 1,
+                         stringsAsFactors = FALSE) %>%
+  rownames_to_column("sample_id") %>%
+  mutate(sample_id = gsub("-", ".", sample_id)) %>%
+  column_to_rownames("sample_id")
+```
+
+```{r ANCOMBC2, warning=FALSE, message=FALSE}
+##############################################################################
+# ANCOMBC2 Differential Abundance Analysis
+# - For each pair of 'bp_cat' levels (Normal vs Elevated, etc.)
+# - Include 'study' and 'sex' as covariates
+##############################################################################
+
+# Convert tables to phyloseq object
+otu_table <- otu_table(as.matrix(bp_ft_table_filtered), taxa_are_rows = FALSE)
+sample_data <- sample_data(bp_meta)
+physeq <- phyloseq(otu_table, sample_data)
+
+# Define levels of the variable of interest
+sample_data(physeq)$bp_cat <- factor(sample_data(physeq)$bp_cat, 
+                                       levels = c("Normal", "Elevated", "Stage 1", "Stage 2"))
+
+#run ANCOMBC on bp category with study and sex as covariates
+set.seed(123)
+ancombc_results <- ancombc2(
+  data = physeq,
+  assay_name = "counts",                # Count data
+  fix_formula = "bp_cat + study + sex + age_cat", # Fixed effects: bp category with study sex as covariates
+  group = "bp_cat",                     # Specify the grouping variable for multi-level tests
+  p_adj_method = "hochberg",            # Adjust p-values using hochberg method
+  prv_cut = 0,                          # Data pre-filtered, no prevalence cutoff needed
+  lib_cut = 0,                          # Library size threshold
+  alpha = 0.05,                         # Significance level
+  global = TRUE,                        # Perform global test
+  pairwise = TRUE,                      # Perform pairwise comparisons
+  verbose = TRUE)                       # Enable detailed messages
+
+# extract results
+res <- ancombc_results$res %>%
+  as.data.frame()
+
+# write global results csv file
+write_csv(res, "../output_files/ancombc/ancombc_results_bp_sex_cov_study_rand.csv")
+
+# extract global results
+res_global <- ancombc_results$res_global %>%
+  as.data.frame()
+
+# write global results csv file
+write_csv(res_global, "../output_files/ancombc/ancombc_results_bp_sex_cov_study_rand.csv")
+
+# extract pairwise results
+res_pairwise <- ancombc_results$res_pair %>%
+  as.data.frame()
+
+# write pairwise results csv file
+write_csv(res_pairwise, "../output_files/ancombc/ancombc_pairwise_bp_sex_cov_study_rand.csv")
+
+# identify column names for significant taxa filtering and visualization
+colnames(res_pairwise)
+
+# Filter Significant Taxa
+significant_taxa <- res_pairwise %>%
+  filter(`diff_bp_catElevated` == TRUE |
+         `diff_bp_catStage 1` == TRUE |
+         `diff_bp_catStage 2` == TRUE |
+         `diff_bp_catStage 1_bp_catElevated` == TRUE |
+         `diff_bp_catStage 2_bp_catElevated` == TRUE |
+         `diff_bp_catStage 2_bp_catStage 1` == TRUE)
+
+# Save Filtered Taxa to CSV
+write_csv(significant_taxa, "../output_files/ancombc/significant_taxa_bp_filtered.csv")
+```
+
+```{r metagenomeSeq analysis, warning=FALSE, message=FALSE}
+##############################################################################
+# MetagenomeSeq Differential Abundance Analysis
+# - For each pair of 'bp_cat' levels (Normal vs Elevated, etc.)
+# - Include 'study' and 'sex' as covariates
+##############################################################################
+
+# Transpose feature table for input into MetagenomeSeq
+bp_ft_table_mgs_filtered <- bp_ft_table_filtered %>%
+  t()
+
+# Check that metadata and feature table have matching sample IDs
+all(colnames(bp_ft_table_mgs_filtered) %in% rownames(bp_meta))
+
+# Ensure 'Normal' is set as the reference level for bp_cat
+bp_meta$bp_cat <- factor(
+  bp_meta$bp_cat,
+  levels = c("Normal", "Elevated", "Stage 1", "Stage 2"))
+
+# Create one MRexperiment object for the entire dataset
+phenoData_full <- AnnotatedDataFrame(bp_meta)
+featureData_full <- AnnotatedDataFrame(
+  data.frame(
+    Feature = rownames(bp_ft_table_mgs_filtered),
+    row.names = rownames(bp_ft_table_mgs_filtered)
+  )
+)
+
+MRobj_full <- newMRexperiment(
+  counts       = bp_ft_table_mgs_filtered,
+  phenoData    = phenoData_full,
+  featureData  = featureData_full
+)
+
+# Perform global CSS normalization across all samples
+MRobj_full <- cumNorm(MRobj_full)
+
+# Define all pairwise comparisons of the 4 levels
+pairwise_comparisons <- combn(levels(bp_meta$bp_cat), 2, simplify = FALSE)
+
+# Loop through each pairwise comparison
+for (pair in pairwise_comparisons) {
+  # Label for the comparison (placing pair[2] first in the name)
+  display_comparison_name <- paste(pair[2], pair[1], sep = "_vs_")
+  message("Running pairwise comparison: ", display_comparison_name)
+  
+  # Identify which samples belong to these two levels
+  sub_index <- pData(MRobj_full)$bp_cat %in% pair
+  
+  # Subset the already-normalized MRexperiment object
+  MRobj_subset <- MRobj_full[, sub_index]
+  
+  # Re-factor bp_cat so pair[1] is baseline and pair[2] is tested
+  pData(MRobj_subset)$bp_cat <- factor(pData(MRobj_subset)$bp_cat, levels = pair)
+  
+  # Verify that we have samples in this subset
+  if (ncol(MRobj_subset) == 0) {
+    message("No matching samples found for comparison: ", display_comparison_name)
+    next
+  }
+  
+  # Build the model matrix for this subset
+  model_matrix <- model.matrix(~ bp_cat + study + sex + age_cat, data = pData(MRobj_subset))
+  
+  # Fit the model using fitZig
+  fit <- tryCatch({
+    fitZig(MRobj_subset, mod = model_matrix)
+  }, error = function(e) {
+    message("Error running fitZig for ", display_comparison_name, ": ", e$message)
+    return(NULL)
+  })
+  
+  if (is.null(fit)) {
+    next
+  }
+  
+  # Save MRexperiment subset object if desired
+  MRobj_filename <- paste0("../output_files/metagenomeSeq/MRobj_", display_comparison_name, ".RDS")
+  saveRDS(MRobj_subset, file = MRobj_filename)
+  message("Saved subset MRexperiment to ", MRobj_filename)
+  
+  # Extract results with built-in FDR correction
+  res <- tryCatch({
+    MRcoefs(fit, adjustMethod = "hochberg")  # or "BH"/"fdr"
+  }, error = function(e) {
+    message("Error extracting results for ", display_comparison_name, ": ", e$message)
+    return(NULL)
+  })
+  
+  if (is.null(res)) {
+    next
+  }
+  
+  # Convert results to a data frame
+  res_df <- as.data.frame(res)
+  res_df$contrast <- display_comparison_name
+  
+  # 11) Filter significant taxa (adjust as desired)
+  res_sig <- res_df %>%
+    filter(adjPvalues < 0.1) %>%
+    arrange(adjPvalues)
+  
+  if (nrow(res_sig) == 0) {
+    message("No significant taxa found for contrast: ", display_comparison_name)
+    next
+  }
+  
+  # Save results to a CSV file
+  output_csv <- file.path(
+    "../output_files/metagenomeSeq", 
+    paste0(display_comparison_name, "_pairwise_results.csv")
+  )
+  write.csv(res_sig, file = output_csv, row.names = TRUE)
+  
+  message("Saved results for contrast: ", display_comparison_name)
+}
+
+message("All pairwise comparisons completed successfully.")
+```
+
+```{r corncob analysis, warning=FALSE, message=FALSE}
+##############################################################################
+# Corncob Pairwise Differential Abundance Analysis
+# - For each pair of 'bp_cat' levels (Normal vs Elevated, etc.)
+# - Include 'study' and 'sex' as covariates
+##############################################################################
+
+# Convert tables to phyloseq object
+otu_table <- otu_table(as.matrix(bp_ft_table_filtered), taxa_are_rows = FALSE)
+sample_data <- sample_data(bp_meta)
+physeq2 <- phyloseq(otu_table, sample_data)
+
+# Check if 'bp_cat' is a factor
+is_factor <- is.factor(sample_data(physeq2)$bp_cat)
+print(paste("'bp_cat' is a factor:", is_factor))
+
+# If not, convert it to a factor with appropriate levels
+if(!is_factor) {
+  # Inspect unique values to define levels correctly
+  unique_bp <- unique(sample_data(physeq2)$bp_cat)
+  print("Unique 'bp_cat' values:")
+  print(unique_bp)
+  
+  # Define levels of the variable of interest
+  sample_data(physeq2)$bp_cat <- factor(sample_data(physeq2)$bp_cat, 
+                                         levels = c("Normal", "Elevated", "Stage 1", "Stage 2"))
+}
+
+# Verify the levels
+bp_levels <- levels(sample_data(physeq2)$bp_cat)
+print("Levels of 'bp_cat':")
+print(bp_levels)
+
+# Ensure there are at least two levels
+if(length(bp_levels) < 2) {
+  stop("Error: 'bp_cat' must have at least two levels for pairwise comparisons.")
+}
+
+# Define Pairwise Comparisons
+# Generate all unique pairwise combinations of bp_cat levels
+pairwise_comparisons <- combn(bp_levels, 2, simplify = FALSE)
+
+# Loop through each pairwise comparison
+for(pair in pairwise_comparisons) {
+  
+  # Flip the naming in the output files so the tested group is first
+  display_comparison_name <- paste(pair[2], pair[1], sep = "_vs_")
+  message("Running corncob for comparison: ", display_comparison_name)
+  
+  # Subset Phyloseq Object
+  physeq_subset <- subset_samples(physeq2, bp_cat %in% pair)
+  physeq_subset <- prune_taxa(taxa_sums(physeq_subset) > 0, physeq_subset)
+  sample_data(physeq_subset)$bp_cat <- factor(sample_data(physeq_subset)$bp_cat, levels = pair)
+  
+  # Run Corncob Differential Abundance Test
+  corncob_res <- tryCatch({
+      differentialTest(
+        formula = ~ bp_cat + study + sex + age_cat,
+        formula_null = ~ study + sex + age_cat,
+        phi.formula = ~ bp_cat + study + sex + age_cat,
+        phi.formula_null = ~ bp_cat + study + sex + age_cat,
+        test = "Wald",
+        boot = FALSE,
+        data = physeq_subset,
+        fdr_cutoff = 0.1)
+    }, error = function(e) {
+      message("Error running corncob for comparison ", display_comparison_name, ": ", e$message)
+      return(NULL)
+    })
+  
+  if(is.null(corncob_res) || length(corncob_res$significant_taxa) == 0) {
+    message("No significant taxa found for comparison: ", display_comparison_name)
+    next
+  }
+  
+  # Save corncob_res object for manual inspection
+  corncob_res_filename <- paste0("../output_files/corncob/corncob_res_", display_comparison_name, ".RDS")
+  saveRDS(corncob_res, file = corncob_res_filename)
+  message("Saved corncob_res object to ", corncob_res_filename)
+  
+  # Extract Results with Accurate Matching
+  # 'pair[2]' is the tested group, so the coefficient name is "bp_cat<tested_group>"
+  comparison_variable <- paste0("bp_cat", pair[2])
+  corncob_sig_df <- data.frame(
+    Taxon = corncob_res$significant_taxa,
+    p_value = sapply(seq_along(corncob_res$significant_taxa), function(i) {
+      if (corncob_res$significant_taxa[i] %in% names(corncob_res$p)) {
+        return(corncob_res$p[[corncob_res$significant_taxa[i]]])
+      }
+      return(NA)
+    }),
+    p_value_fdr = sapply(seq_along(corncob_res$significant_taxa), function(i) {
+      if (corncob_res$significant_taxa[i] %in% names(corncob_res$p_fdr)) {
+        return(corncob_res$p_fdr[[corncob_res$significant_taxa[i]]])
+      }
+      return(NA)
+    }),
+    coefficient = sapply(seq_along(corncob_res$significant_models), function(i) {
+      model <- corncob_res$significant_models[[i]]
+      if (!is.null(model$coefficients)) {
+        coef_row <- grep(paste0("^mu\\.", comparison_variable, "$"), rownames(model$coefficients))
+        if (length(coef_row) > 0) {
+          return(model$coefficients[coef_row, "Estimate"])
+        }
+      }
+      return(NA)
+    }),
+    stringsAsFactors = FALSE)
+  
+  # Filter significant taxa
+  corncob_sig_df <- corncob_sig_df %>%
+    filter(p_value < 0.05 & p_value_fdr < 0.1)
+  
+  if(nrow(corncob_sig_df) == 0) {
+    message("No significant taxa passed the filtering criteria for comparison: ", display_comparison_name)
+    next
+  }
+  
+  # Save Significant Corncob Results as CSV
+  csv_filename <- paste0("corncob_", display_comparison_name, "_significant_results.csv")
+  write.csv(corncob_sig_df, file = paste0("../output_files/corncob/", csv_filename), row.names = FALSE)
+  message("Saved significant corncob results to ../output_files/corncob/", csv_filename)
+  
+  message(nrow(corncob_sig_df), " significant taxa found for comparison: ", display_comparison_name)
+}
+
+# Summary message
+message("All pairwise corncob analyses completed.")
+```
+
+``` {r DeSeq2, warning=FALSE, message=FALSE}
+##############################################################################
+# DESeq2 Pairwise Differential Abundance Analysis
+# - For each pair of 'bp_cat' levels (Normal vs Above Optimal, etc.)
+# - Include 'study' and 'sex' as covariates
+##############################################################################
+
+# Transpose feature table to match DESeq2's requirements (rows = features, columns = samples)
+bp_ft_table_deseq2 <- bp_ft_table_filtered %>%
+  t() %>%
+  as.data.frame()
+
+# Ensure rownames of bp_meta match colnames of the feature table
+if (!all(colnames(bp_ft_table_deseq2) %in% rownames(bp_meta))) {
+  stop("Sample IDs in the feature table do not match those in the metadata.")
+  }
+
+# Reorder metadata to match the feature table
+bp_meta <- bp_meta[colnames(bp_ft_table_deseq2), ]
+
+# Ensure correct variable types in metadata
+bp_meta <- bp_meta %>%
+  mutate(
+    study = as.factor(study),          # Study as a factor
+    sex = as.factor(sex),              # Sex as a factor
+    bp_cat = factor(bp_cat, levels = c("Normal", "Elevated", "Stage 1", "Stage 2")))  # BP category as a factor
+
+# Create DESeq2 dataset
+dds <- DESeqDataSetFromMatrix(
+  countData = bp_ft_table_deseq2,
+  colData = bp_meta,
+  design = ~ bp_cat + study + sex + age_cat)
+
+# Perform DESeq2 analysis with size factors set to 'poscounts'
+dds <- dds %>%
+  estimateSizeFactors(type = "poscounts") %>%
+  DESeq()
+
+# Define pairwise comparisons based on levels of bp_cat
+bp_levels <- levels(bp_meta$bp_cat)
+pairwise_comparisons <- combn(bp_levels, 2, simplify = FALSE)
+
+# Initialize a list to store results
+results_list <- list()
+
+# Loop through each pairwise comparison
+for (pair in pairwise_comparisons) {
+  # Define comparison name
+  comparison_name <- paste(pair[2], "vs", pair[1], sep = "_")
+  message("Processing comparison: ", comparison_name)
+  
+  # Perform DESeq2 analysis for the pair
+  res <- results(
+    dds,
+    contrast = c("bp_cat", pair[2], pair[1]))  # pair[2] (numerator) compared to pair[1] (denominator)
+  
+  # Save results to the list
+  results_list[[comparison_name]] <- res
+  
+  # Write results to a CSV file
+  write.csv(
+    as.data.frame(res),
+    file = paste0("../output_files/DESeq2/DESeq2_", comparison_name, "_results.csv"),
+    row.names = TRUE)
+}
+
+# Final Message
+message("All pairwise comparisons completed successfully.")
+```
+
+```{r consensus analysis, warning=FALSE, message=FALSE}
+# Define File Paths
+# ANCOMBC2 Files
+ancombc2_file <- "../output_files/ancombc/significant_taxa_bp_filtered.csv"
+
+# MetagenomeSeq Files
+metagenomeseq_files <- list.files("../output_files/metagenomeSeq/", 
+                                  full.names = TRUE, 
+                                  pattern = "_pairwise_results.csv$")
+# Corncob Files
+corncob_files <- list.files("../output_files/corncob/", 
+                            full.names = TRUE, 
+                            pattern = "_results.csv$")
+
+# DeSeq2 Files
+deseq2_files <- list.files("../output_files/DESeq2/", 
+                           full.names = TRUE, 
+                           pattern = "^DESeq2_.*_results.csv$")
+
+# ----------------------------
+# Process ANCOMBC2 File
+# ----------------------------
+ancombc2_results <- read.csv(ancombc2_file) %>%
+  # Keep only rows where at least one 'diff_*' column is TRUE
+  filter(if_any(starts_with("diff_bp"), ~ . == TRUE)) %>%
+  # Pivot longer for diff_* columns to identify TRUE comparisons
+  pivot_longer(cols = starts_with("diff_bp"), names_to = "comparison", values_to = "is_differential") %>%
+  # Keep only comparisons flagged as TRUE
+  filter(is_differential == TRUE) %>%
+  # Extract corresponding coefficient, p-value, and FDR for each TRUE comparison
+  rowwise() %>%
+  mutate(
+    coefficient = get(paste0("lfc_", str_remove(comparison, "diff_"))),
+    p_value     = get(paste0("p_",   str_remove(comparison, "diff_"))),
+    fdr         = get(paste0("q_",   str_remove(comparison, "diff_")))) %>%
+  ungroup() %>%
+  # Standardize method column and select relevant variables
+  mutate(method = "ANCOMBC2") %>%
+  select(
+    taxon,
+    comparison,
+    coefficient,
+    p_value,
+    fdr,
+    method) %>%
+  mutate(
+    comparison = case_when(
+      comparison == "diff_bp_catElevated"               ~ "Elevated_vs_Normal",
+      comparison == "diff_bp_catStage.1"                ~ "Stage 1_vs_Normal",
+      comparison == "diff_bp_catStage.2"                ~ "Stage 2_vs_Normal",
+      comparison == "diff_bp_catStage.1_bp_catElevated" ~ "Stage 1_vs_Elevated",
+      comparison == "diff_bp_catStage.2_bp_catElevated" ~ "Stage 2_vs_Elevated",
+      comparison == "diff_bp_catStage.2_bp_catStage.1"  ~ "Stage 2_vs_Stage 1",
+      TRUE                                              ~ comparison))
+
+write_csv(ancombc2_results, "../output_files/ancombc/ancombc2_results.csv")
+
+# ----------------------------
+# Process MetagenomeSeq Files
+# ----------------------------
+metagenomeseq_results <- lapply(metagenomeseq_files, function(file) {
+  # Read the data
+  data <- read.csv(file)
+  
+  # Rename the first column directly to "taxon"
+  colnames(data)[1] <- "taxon"
+  
+  # Process the data
+  data %>%
+    filter(pvalues < 0.05, adjPvalues < 0.1) %>%  # Filter significant results
+    mutate(
+      coefficient = across(starts_with("bp_cat"), ~ .[1]) %>% unlist(),  # Extract coefficient
+      comparison  = contrast,  # Add comparison information
+      method      = "MetagenomeSeq",  # Add method identifier
+      file        = basename(file)  # Add file name
+    ) %>%
+    select(
+      taxon,  # Taxon column
+      comparison,  # Comparison column
+      coefficient,  # Coefficient
+      p_value = pvalues,  # Rename p-values
+      fdr = adjPvalues,  # Rename adjusted p-values
+      method  # Method identifier
+    )
+}) %>% bind_rows()
+
+write_csv(metagenomeseq_results, "../output_files/metagenomeSeq/metagenomeseq_results.csv")
+
+# ----------------------------
+# Process Corncob Files
+# ----------------------------
+lapply(corncob_files, function(file) {
+  df <- read.csv(file)
+  print(colnames(df))})
+
+corncob_results <- lapply(corncob_files, function(file) {
+  read.csv(file) %>%
+    filter(!is.na(p_value) & !is.na(p_value_fdr)) %>%
+    filter(p_value < 0.05, p_value_fdr < 0.1) %>%
+    mutate(
+      method     = "Corncob",
+      comparison = gsub("_results.csv", "", basename(file))) %>%
+    select(
+      taxon = Taxon,
+      comparison,
+      coefficient,
+      p_value,
+      fdr = p_value_fdr,
+      method)}) %>% 
+  bind_rows() %>%
+  mutate(
+    comparison = comparison %>%
+      str_remove("^corncob_") %>%      # Remove the prefix
+      str_remove("_significant$"))      # Remove the suffix
+
+write_csv(corncob_results, "../output_files/corncob/corncob_results.csv")
+
+# ----------------------------
+# Process DESeq2 Files
+# ----------------------------
+deseq2_results <- lapply(deseq2_files, function(file) {
+  # Extract the comparison name from the file name
+  comparison_name <- gsub("^DESeq2_|_results.csv$", "", basename(file))
+  
+  # Read the DESeq2 results file
+  data <- read.csv(file)
+  
+  # Ensure the first column is correctly renamed to "taxon"
+  colnames(data)[1] <- "taxon"
+  
+  # Process the data
+  data %>%
+    mutate(
+      comparison = comparison_name,  # Add comparison info from the file name
+      method = "DeSeq2"  # Add method identifier
+    ) %>%
+    select(
+      taxon,  # Taxa column
+      comparison,  # Comparison name
+      coefficient = log2FoldChange,  # Log fold change
+      p_value = pvalue,  # Raw p-value
+      fdr = padj,  # Adjusted p-value
+      method  # Method identifier
+    ) %>%
+    filter(!is.na(fdr) & fdr < 0.1)  # Filter for significant results
+}) %>% bind_rows()
+
+# Save processed results
+write_csv(deseq2_results, "../output_files/DESeq2/DESeq2_results.csv")
+
+# ----------------------------
+# Combine and Identify Overlapping Taxa
+# ----------------------------
+combined_results <- bind_rows(ancombc2_results,
+                              metagenomeseq_results,
+                              corncob_results,
+                              deseq2_results)
+
+write_csv(combined_results, "../output_files/combined_results.csv")
+
+# ----------------------------
+# Preserve Direction in comparison_key (No Sorting)
+# ----------------------------
+combined_results <- combined_results %>%
+  mutate(
+    comparison_key = comparison)
+
+# Validate comparison keys
+print("Unique comparison keys after preserving direction:")
+print(unique(combined_results$comparison_key))
+
+# Identify consensus taxon
+consensus_taxon <- combined_results %>%
+  group_by(taxon, comparison_key) %>%
+  summarise(
+    method_count = n_distinct(method),
+    .groups = "drop") %>%
+  filter(method_count >= 2)
+
+# Join back to retain original details
+consensus_taxon_details <- combined_results %>%
+  inner_join(consensus_taxon, by = c("taxon", "comparison_key"))
+
+# Validate resulting consensus taxon
+head(consensus_taxon_details)
+
+# Save the filtered consensus taxon to a CSV file
+write_csv(consensus_taxon_details, "../output_files/consensus_taxon_results.csv")
+
+# Load the data
+original_data <- read_csv("../output_files/combined_results.csv")
+str(original_data)
+
+consensus_data <- read_csv("../output_files/consensus_taxon_results.csv")
+str(consensus_data)
+
+# Ensure coefficient is numeric
+consensus_data <- consensus_data %>%
+  mutate(coefficient = as.numeric(coefficient))
+
+# ----------------------------
+# Bar Plot: Number of taxon by Method
+# ----------------------------
+# Prepare data for bar plot
+method_counts <- original_data %>%
+  group_by(method) %>%
+  summarise(total_taxon = n_distinct(taxon)) %>%
+  arrange(desc(total_taxon))
+
+# Bar plot
+ggplot(method_counts, aes(x = reorder(method, -total_taxon), y = total_taxon, fill = method)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  labs(
+    title = "Number of Differentially Abundant taxon by Method",
+    x = "Method",
+    y = "Number of taxon") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Save bar plot
+ggsave("../output_files/taxon_by_method_barplot.png", width = 8, height = 6)
+```
+
+```{r read in files for microeco}
+set.seed(123)
+library(tidyverse)
+
+# transpose filtered_tax_table in Excel and save as tsv
+# replace - with . in subject names
+# read feature table for differential abundance 
+otu_table <- read.table("../input_files/filtered_tax_table_transposed.tsv",
+                         header = TRUE, 
+                         sep = "\t",
+                         row.names = 1,
+                         stringsAsFactors = FALSE)
+
+# copy taxonomy from filtered_tax_table_all.csv and save as tsv
+# read taxa table for differential abundance 
+tax_table <- read.table("../input_files/tax_table.tsv",
+                         header = TRUE, 
+                         sep = "\t",
+                         row.names = 1,
+                         stringsAsFactors = FALSE)
+
+# transpose filtered_tax_table in Excel and save as tsv
+# replace - with . in subject names
+# Read in the metadata file for differential abundance 
+bp_meta <-read.table("../input_files/bp_meta_baseline.tsv", 
+                         header = TRUE, 
+                         sep = "\t",
+                         row.names = 1,
+                         stringsAsFactors = FALSE)
+```
+
+```{r microeco microtable setup, message=FALSE, warning=FALSE}
+set.seed(123)
+library(microeco)
+library(ggplot2)
+theme_set(theme_bw())
+
+tax_table <- tidy_taxonomy(tax_table)
+
+# Let's create a microtable object with more information
+mt <- microtable$new(
+  sample_table = bp_meta, 
+  otu_table = otu_table, 
+  tax_table = tax_table)
+mt
+
+# clone mt for backup
+mt_raw <- clone(mt)
+
+```
+
+```{r microeco bp_normal ASV cal abund, message=FALSE, warning=FALSE}
+# clone the dataset for bp_normal
+bp_normal <- clone(mt)
+# select 'Normal'
+bp_normal$sample_table <- subset(bp_normal$sample_table, bp_cat == "Normal")
+
+# trim all the data
+bp_normal$tidy_dataset()
+bp_normal
+
+bp_normal$add_rownames2taxonomy("ASV")
+# then we can calculate the relative abundance of ASV
+# for all taxonomic levels like commonly operation
+bp_normal$cal_abund()
+View(bp_normal$taxa_abund$ASV)
+
+# show part of the relative abundance at Phylum level
+bp_normal$taxa_abund$Phylum[1:5, 1:5]
+
+# show part of the relative abundance at Family level
+bp_normal$taxa_abund$Family[1:5, 1:5]
+
+# show part of the relative abundance at ASV level
+bp_normal$taxa_abund$ASV[1:5, 1:5]
+```
+
+```{r microeco sparcc bp_normal sparcc/spiec-easi, message=FALSE, warning=FALSE}
+# Require SpiecEasi package
+bp_normal_net <- trans_network$new(
+  dataset = bp_normal, 
+  cor_method = "sparcc", 
+  use_sparcc_method = "SpiecEasi")
+
+# Construct network; require igraph package
+bp_normal_net$cal_network(
+  network_method = "SpiecEasi", 
+  COR_p_thres = 0.01)
+
+# Invoke igraph cluster_fast_greedy function for this undirected network 
+bp_normal_net$cal_module(method = "cluster_walktrap")
+
+bp_normal_net$save_network(
+  filepath = "../output_files/microeco/bp_normal_network.gexf")
+
+# Calculate network attributes
+bp_normal_net$cal_network_attr()
+bp_normal_net$res_network_attr
+
+# get node properties
+bp_normal_net$get_node_table(node_roles = TRUE)
+bp_normal_net$res_node_table
+
+bp_normal_node_table <- bp_normal_net$res_node_table %>%
+  as.data.frame()
+
+write_csv(bp_normal_node_table, 
+          "../output_files/microeco/bp_normal_node_table.csv")
+
+# get edge properties
+bp_normal_net$get_edge_table()
+bp_normal_net$res_edge_table 
+
+bp_normal_edge_table <- bp_normal_net$res_edge_table %>%
+  as.data.frame()
+
+write_csv(bp_normal_edge_table, 
+          "../output_files/microeco/bp_normal_edge_table.csv")
+
+bp_normal_net$get_adjacency_matrix()
+bp_normal_net$res_adjacency_matrix
+
+bp_normal_adjacency_table <- bp_normal_net$res_adjacency_matrix %>%
+  as.data.frame()
+
+write_csv(bp_normal_adjacency_table, 
+          "../output_files/microeco/bp_normal_adjacency_table.csv")
+
+bp_normal_net$cal_eigen()
+bp_normal_net$res_eigen
+
+bp_normal_eigen_table <- bp_normal_net$res_eigen %>%
+  as.data.frame()
+
+write_csv(bp_normal_eigen_table, 
+          "../output_files/microeco/bp_normal_eigen_table.csv")
+
+# plot network
+bp_normal_plot <- bp_normal_net$plot_network(
+  method = "ggraph", 
+  node_color = "module",
+  ggraph_text_size = 2)
+
+# view plotted network
+bp_normal_plot
+
+bp_normal_net$cal_sum_links(
+  taxa_level = "Phylum")
+
+pos_links_bp_normal <- bp_normal_net$plot_sum_links(
+  plot_pos = TRUE, 
+  plot_num = 10, 
+  color_values = RColorBrewer::brewer.pal(10, "Paired"))
+
+# circlize to save plot
+pos_links_bp_normal <- bp_normal_net$plot_sum_links(
+  method = "circlize", 
+  transparency = 0.2, 
+  annotationTrackHeight = circlize::mm_h(c(5, 5)))
+
+write.csv(pos_links_bp_normal,
+          "../output_files/microeco/pos_links_bp_normal.csv")
+
+bp_normal_net$cal_sum_links(
+  taxa_level = "Phylum")
+
+neg_links_bp_normal <- bp_normal_net$plot_sum_links(
+  plot_pos = FALSE, 
+  plot_num = 10, 
+  color_values = RColorBrewer::brewer.pal(10, "Paired"))
+
+# circlize to save plot
+neg_links_bp_normal <- bp_normal_net$plot_sum_links(
+  plot_pos = FALSE,
+  method = "circlize", 
+  transparency = 0.2, 
+  annotationTrackHeight = circlize::mm_h(c(5, 5)))
+
+write.csv(neg_links_bp_normal,
+          "../output_files/microeco/neg_links_bp_normal.csv")
+```
+
+```{r random network generation bp_normal_net, message=FALSE, warning=FALSE}
+bp_normal_net$random_network(runs = 100, output_sim = FALSE)
+```
+
+```{r microeco bp_elevated ASV cal abund, message=FALSE, warning=FALSE}
+# clone the dataset for bp_elevated
+bp_elevated <- clone(mt)
+# select 'Normal'
+bp_elevated$sample_table <- subset(bp_elevated$sample_table, bp_cat == "Elevated")
+
+# trim all the data
+bp_elevated$tidy_dataset()
+bp_elevated
+
+bp_elevated$add_rownames2taxonomy("ASV")
+# then we can calculate the relative abundance of ASV
+# for all taxonomic levels like commonly operation
+bp_elevated$cal_abund()
+View(bp_elevated$taxa_abund$ASV)
+
+# show part of the relative abundance at Phylum level
+bp_elevated$taxa_abund$Phylum[1:5, 1:5]
+
+# show part of the relative abundance at Family level
+bp_elevated$taxa_abund$Family[1:5, 1:5]
+
+# show part of the relative abundance at ASV level
+bp_elevated$taxa_abund$ASV[1:5, 1:5]
+```
+
+```{r microeco sparcc bp_elevated sparcc/spiec-easi, message=FALSE, warning=FALSE}
+# Require SpiecEasi package
+bp_elevated_net <- trans_network$new(
+  dataset = bp_elevated, 
+  cor_method = "sparcc", 
+  use_sparcc_method = "SpiecEasi")
+
+# Construct network; require igraph package
+bp_elevated_net$cal_network(
+  network_method = "SpiecEasi", 
+  COR_p_thres = 0.01)
+
+# Invoke igraph cluster_fast_greedy function for this undirected network 
+bp_elevated_net$cal_module(method = "cluster_walktrap")
+
+bp_elevated_net$save_network(
+  filepath = "../output_files/microeco/bp_elevated_network.gexf")
+
+# Calculate network attributes
+bp_elevated_net$cal_network_attr()
+bp_elevated_net$res_network_attr
+
+# get node properties
+bp_elevated_net$get_node_table(node_roles = TRUE)
+bp_elevated_net$res_node_table
+
+bp_elevated_node_table <- bp_elevated_net$res_node_table %>%
+  as.data.frame()
+
+write_csv(bp_elevated_node_table, 
+          "../output_files/microeco/bp_elevated_node_table.csv")
+
+# get edge properties
+bp_elevated_net$get_edge_table()
+bp_elevated_net$res_edge_table 
+
+bp_elevated_edge_table <- bp_elevated_net$res_edge_table %>%
+  as.data.frame()
+
+write_csv(bp_elevated_edge_table, 
+          "../output_files/microeco/bp_elevated_edge_table.csv")
+
+bp_elevated_net$get_adjacency_matrix()
+bp_elevated_net$res_adjacency_matrix
+
+bp_elevated_adjacency_table <- bp_elevated_net$res_adjacency_matrix %>%
+  as.data.frame()
+
+write_csv(bp_elevated_adjacency_table, 
+          "../output_files/microeco/bp_elevated_adjacency_table.csv")
+
+bp_elevated_net$cal_eigen()
+bp_elevated_net$res_eigen
+
+bp_elevated_eigen_table <- bp_elevated_net$res_eigen %>%
+  as.data.frame()
+
+write_csv(bp_elevated_eigen_table, 
+          "../output_files/microeco/bp_elevated_eigen_table.csv")
+
+# plot network
+bp_elevated_plot <- bp_elevated_net$plot_network(
+  method = "networkD3", 
+  node_color = "module",
+  ggraph_text_size = 2)
+
+# view plotted network
+bp_elevated_plot
+
+bp_elevated_net$cal_sum_links(
+  taxa_level = "Phylum")
+
+pos_links_bp_elevated <- bp_elevated_net$plot_sum_links(
+  plot_pos = TRUE, 
+  plot_num = 10, 
+  color_values = RColorBrewer::brewer.pal(10, "Paired"))
+
+# circlize to save plot
+pos_links_bp_elevated <- bp_elevated_net$plot_sum_links(
+  method = "circlize", 
+  transparency = 0.2, 
+  annotationTrackHeight = circlize::mm_h(c(5, 5)))
+
+write.csv(pos_links_bp_elevated,
+          "../output_files/microeco/pos_links_bp_elevated.csv")
+
+bp_elevated_net$cal_sum_links(
+  taxa_level = "Phylum")
+
+neg_links_bp_elevated <- bp_elevated_net$plot_sum_links(
+  plot_pos = FALSE, 
+  plot_num = 10, 
+  color_values = RColorBrewer::brewer.pal(10, "Paired"))
+
+# circlize to save plot
+neg_links_bp_elevated <- bp_elevated_net$plot_sum_links(
+  plot_pos = FALSE,
+  method = "circlize", 
+  transparency = 0.2, 
+  annotationTrackHeight = circlize::mm_h(c(5, 5)))
+
+write.csv(neg_links_bp_elevated,
+          "../output_files/microeco/neg_links_bp_elevated.csv")
+```
+
+```{r random network generation bp_elevated_net, message=FALSE, warning=FALSE}
+bp_elevated_net$random_network(runs = 100, output_sim = FALSE)
+```
+
+```{r microeco bp_stage1 ASV cal abund, message=FALSE, warning=FALSE}
+# clone the dataset for bp_stage1
+bp_stage1 <- clone(mt)
+# select 'Normal'
+bp_stage1$sample_table <- subset(bp_stage1$sample_table, bp_cat == "Stage 1")
+
+# trim all the data
+bp_stage1$tidy_dataset()
+bp_stage1
+
+bp_stage1$add_rownames2taxonomy("ASV")
+# then we can calculate the relative abundance of ASV
+# for all taxonomic levels like commonly operation
+bp_stage1$cal_abund()
+View(bp_stage1$taxa_abund$ASV)
+
+# show part of the relative abundance at Phylum level
+bp_stage1$taxa_abund$Phylum[1:5, 1:5]
+
+# show part of the relative abundance at Family level
+bp_stage1$taxa_abund$Family[1:5, 1:5]
+
+# show part of the relative abundance at ASV level
+bp_stage1$taxa_abund$ASV[1:5, 1:5]
+```
+
+```{r microeco sparcc bp_stage1 sparcc/spiec-easi, message=FALSE, warning=FALSE}
+# Require SpiecEasi package
+bp_stage1_net <- trans_network$new(
+  dataset = bp_stage1, 
+  cor_method = "sparcc", 
+  use_sparcc_method = "SpiecEasi")
+
+# Construct network; require igraph package
+bp_stage1_net$cal_network(
+  network_method = "SpiecEasi", 
+  COR_p_thres = 0.01)
+
+# Invoke igraph cluster_fast_greedy function for this undirected network 
+bp_stage1_net$cal_module(method = "cluster_walktrap")
+
+bp_stage1_net$save_network(
+  filepath = "../output_files/microeco/bp_stage1_network.gexf")
+
+# Calculate network attributes
+bp_stage1_net$cal_network_attr()
+bp_stage1_net$res_network_attr
+
+# get node properties
+bp_stage1_net$get_node_table(node_roles = TRUE)
+bp_stage1_net$res_node_table
+
+bp_stage1_node_table <- bp_stage1_net$res_node_table %>%
+  as.data.frame()
+
+write_csv(bp_stage1_node_table, 
+          "../output_files/microeco/bp_stage1_node_table.csv")
+
+# get edge properties
+bp_stage1_net$get_edge_table()
+bp_stage1_net$res_edge_table 
+
+bp_stage1_edge_table <- bp_stage1_net$res_edge_table %>%
+  as.data.frame()
+
+write_csv(bp_stage1_edge_table, 
+          "../output_files/microeco/bp_stage1_edge_table.csv")
+
+bp_stage1_net$get_adjacency_matrix()
+bp_stage1_net$res_adjacency_matrix
+
+bp_stage1_adjacency_table <- bp_stage1_net$res_adjacency_matrix %>%
+  as.data.frame()
+
+write_csv(bp_stage1_adjacency_table, 
+          "../output_files/microeco/bp_stage1_adjacency_table.csv")
+
+bp_stage1_net$cal_eigen()
+bp_stage1_net$res_eigen
+
+bp_stage1_eigen_table <- bp_stage1_net$res_eigen %>%
+  as.data.frame()
+
+write_csv(bp_stage1_eigen_table, 
+          "../output_files/microeco/bp_stage1_eigen_table.csv")
+
+# plot network
+bp_stage1_plot <- bp_stage1_net$plot_network(
+  method = "networkD3", 
+  node_color = "module",
+  ggraph_text_size = 2)
+
+# view plotted network
+bp_stage1_plot
+
+bp_stage1_net$cal_sum_links(
+  taxa_level = "Phylum")
+
+pos_links_bp_stage1 <- bp_stage1_net$plot_sum_links(
+  plot_pos = TRUE, 
+  plot_num = 10, 
+  color_values = RColorBrewer::brewer.pal(10, "Paired"))
+
+# circlize to save plot
+pos_links_bp_stage1 <- bp_stage1_net$plot_sum_links(
+  method = "circlize", 
+  transparency = 0.2, 
+  annotationTrackHeight = circlize::mm_h(c(5, 5)))
+
+write.csv(pos_links_bp_stage1,
+          "../output_files/microeco/pos_links_bp_stage1.csv")
+
+bp_stage1_net$cal_sum_links(
+  taxa_level = "Phylum")
+
+neg_links_bp_stage1 <- bp_stage1_net$plot_sum_links(
+  plot_pos = FALSE, 
+  plot_num = 10, 
+  color_values = RColorBrewer::brewer.pal(10, "Paired"))
+
+# circlize to save plot
+neg_links_bp_stage1 <- bp_stage1_net$plot_sum_links(
+  plot_pos = FALSE,
+  method = "circlize", 
+  transparency = 0.2, 
+  annotationTrackHeight = circlize::mm_h(c(5, 5)))
+
+write.csv(neg_links_bp_stage1,
+          "../output_files/microeco/neg_links_bp_stage1.csv")
+```
+
+```{r random network generation bp_stage1_net, message=FALSE, warning=FALSE}
+bp_stage1_net$random_network(runs = 100, output_sim = FALSE)
+```
+
+```{r load packages for network comparison, message=FALSE, warning=FALSE}
+set.seed(123)
+library(tidyverse)
+library(microeco)
+library(meconetcomp)
+# use pipe operator in magrittr package
+library(magrittr)
+library(igraph)
+library(ggplot2)
+theme_set(theme_bw())
+```
+
+```{r network comparison, message=FALSE, warning=FALSE}
+# first create a list
+bp_network <- list()
+
+# select samples of "Normal" group
+# use clone to get a deep copy of bp_network (R6 object)
+tmp <- clone(mt)
+
+# change sample_table directly
+tmp$sample_table %<>% subset(
+  bp_cat == "Normal")
+
+# trim all files in the object
+tmp$tidy_dataset()
+tmp
+
+tmp$add_rownames2taxonomy("ASV")
+# then we can calculate the relative abundance of ASV
+# for all taxonomic levels like common operation
+tmp$cal_abund()
+
+# use filter_thres parameter to filter the feature with low relative abundance
+tmp <- trans_network$new(
+  dataset = tmp, 
+  cor_method = "sparcc", 
+  use_sparcc_method = "SpiecEasi")
+
+# COR_p_thres represents the p value threshold
+tmp$cal_network(
+  network_method = "SpiecEasi", 
+  COR_p_thres = 0.01)
+
+# put the network into the list
+bp_network$bp_normal <- tmp
+
+# select samples of "Elevated" group
+tmp <- clone(mt)
+
+tmp$sample_table %<>% subset(
+  bp_cat == "Elevated")
+
+# trim all files in the object
+tmp$tidy_dataset()
+tmp
+
+tmp$add_rownames2taxonomy("ASV")
+# then we can calculate the relative abundance of ASV
+# for all taxonomic levels like common operation
+tmp$cal_abund()
+
+tmp <- trans_network$new(
+  dataset = tmp,
+  cor_method = "sparcc", 
+  use_sparcc_method = "SpiecEasi")
+
+# COR_p_thres represents the p value threshold
+tmp$cal_network(
+  network_method = "SpiecEasi", 
+  COR_p_thres = 0.01)
+
+bp_network$Elevated <- tmp
+
+# select samples of "Stage 1" group
+tmp <- clone(mt)
+
+tmp$sample_table %<>% subset(
+  bp_cat == "Stage 1")
+
+# trim all files in the object
+tmp$tidy_dataset()
+tmp
+
+tmp$add_rownames2taxonomy("ASV")
+# then we can calculate the relative abundance of ASV
+# for all taxonomic levels like common operation
+tmp$cal_abund()
+
+tmp <- trans_network$new(
+  dataset = tmp,
+  cor_method = "sparcc", 
+  use_sparcc_method = "SpiecEasi")
+
+# COR_p_thres represents the p value threshold
+tmp$cal_network(
+  network_method = "SpiecEasi", 
+  COR_p_thres = 0.01)
+
+bp_network$Stage1 <- tmp
+
+bp_network %<>% cal_module(undirected_method = "cluster_walktrap")
+
+# extract all the res_network_attr tables in the networks
+# merged them into one final table
+res_network_attr <- cal_network_attr(bp_network)
+
+write_csv(
+  res_network_attr,
+  "../output_files/microeco/all_network_attributes.csv")
+
+# extract node and edge properties for all the networks
+bp_network %<>% get_node_table(node_roles = TRUE) %>% get_edge_table
+print(res_network_attr)
+```
+
+```{r compare network nodes bp, warning=FALSE, message=FALSE}
+# obtain the node distributions by searching the res_node_table in the object
+tmp <- node_comp(bp_network, property = "name")
+
+# obtain nodes intersection
+tmp1 <- trans_venn$new(tmp, ratio = "numratio")
+
+g1 <- tmp1$plot_venn(fill_color = FALSE)
+
+problem_elements <- c(
+  "axis.title", "axis.text", "axis.ticks",
+  "legend.key", "legend.text", "legend.title",
+  "panel.background", "panel.grid", "panel.grid.major",
+  "panel.grid.minor", "plot.background", "panel.border"
+)
+
+for (el in problem_elements) {
+  if (!is.null(g1$theme[[el]])) g1$theme[[el]] <- NULL
+}
+
+# optionally blank individual components for a clean plot
+g1 <- g1 + theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  axis.text.x  = element_blank(),
+  axis.text.y  = element_blank(),
+  axis.ticks.x = element_blank(),
+  axis.ticks.y = element_blank(),
+  legend.key   = element_blank(),
+  legend.text  = element_blank(),
+  legend.title = element_blank(),
+  panel.background = element_blank(),
+  panel.border = element_blank()
+)
+
+ggsave("../output_files/microeco/bp_node_overlap.pdf", 
+       g1, width = 7, height = 6)
+
+# calculate jaccard distance to reflect the overall differences of networks
+tmp$cal_betadiv(method = "jaccard")
+jaccard_nodes <- tmp$beta_diversity$jaccard
+jaccard_nodes
+```
+
+```{r compare network edges bp, warning=FALSE, message=FALSE}
+# get the edge distributions across networks
+tmp <- edge_comp(bp_network)
+# obtain edges intersection
+tmp1 <- trans_venn$new(tmp, ratio = "numratio")
+
+g1 <- tmp1$plot_venn(fill_color = FALSE)
+
+problem_elements <- c(
+  "axis.title", "axis.text", "axis.ticks",
+  "legend.key", "legend.text", "legend.title",
+  "panel.background", "panel.grid", "panel.grid.major",
+  "panel.grid.minor", "plot.background", "panel.border"
+)
+
+for (el in problem_elements) {
+  if (!is.null(g1$theme[[el]])) g1$theme[[el]] <- NULL
+}
+
+# optionally blank individual components for a clean plot
+g1 <- g1 + theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  axis.text.x  = element_blank(),
+  axis.text.y  = element_blank(),
+  axis.ticks.x = element_blank(),
+  axis.ticks.y = element_blank(),
+  legend.key   = element_blank(),
+  legend.text  = element_blank(),
+  legend.title = element_blank(),
+  panel.background = element_blank(),
+  panel.border = element_blank()
+)
+
+ggsave("../output_files/microeco/bp_edge_overlap.pdf", 
+       g1, width = 7, height = 6)
+
+# calculate jaccard distance to reflect the overall differences of networks
+tmp$cal_betadiv(method = "jaccard")
+jaccard_edges <- tmp$beta_diversity$jaccard
+jaccard_edges
+```
+
+```{r Extract overlapped edges of networks to a new network, message=FALSE, warning=FALSE}
+# first obtain edges distribution and intersection
+tmp <- edge_comp(bp_network)
+tmp1 <- trans_venn$new(tmp)
+# convert intersection result to a microtable object
+tmp2 <- tmp1$trans_comm()
+# extract the intersection of all the three networks ("IW", "TW" and "CW")
+# please use colnames(tmp2$otu_table) to find the required name
+Intersec_all_ldl <- subset_network(bp_network, venn = tmp2, name = "bp_normal&Elevated&Stage1")
+# no overlapped edges for all three
+
+# Intersec_all is a trans_network object
+# for example, save Intersec_all as gexf format
+Intersec_all_ldl$save_network("../output_files/microeco/Intersec_all.gexf")
+```
+
+```{r Compare node sources of edges across networks, message=FALSE, warning=FALSE}
+# positive edges
+bp_network_edgetax_pos <- edge_tax_comp(bp_network, taxrank = "Phylum", label = "+", rel = TRUE)
+# filter the features with small number
+bp_network_edgetax_pos <- bp_network_edgetax_pos[apply(bp_network_edgetax_pos, 1, mean) > 0.01, ]
+# visualization
+bp_network_edgetax_pos <- bp_network_edgetax_pos[, c("bp_normal", "Elevated", "Stage1")]
+g1 <- pheatmap::pheatmap(bp_network_edgetax_pos, display_numbers = TRUE, cluster_cols = FALSE)
+ggsave("bp_network_edge_tax_pos_comp.pdf", g1, width = 7, height = 7)
+
+# negative edges
+bp_network_edgetax_neg <- edge_tax_comp(bp_network, taxrank = "Phylum", label = "-", rel = TRUE)
+# filter the features with small number
+bp_network_edgetax_neg <- bp_network_edgetax_neg[apply(bp_network_edgetax_neg, 1, mean) > 0.01, ]
+# visualization
+bp_network_edgetax_neg <- bp_network_edgetax_neg[, c("bp_normal", "Elevated", "Stage1")]
+g1 <- pheatmap::pheatmap(bp_network_edgetax_neg, display_numbers = TRUE, cluster_cols = FALSE)
+ggsave("bp_network_edge_tax_neg_comp.pdf", g1, width = 7, height = 7)
+```
+
+```{r Network Robustness edge rand, message=FALSE, warning=FALSE}
+tmp <- robustness$new(bp_network, 
+                      remove_strategy = c("edge_rand", "node_rand"),
+                      remove_ratio = seq(0, 0.99, 0.1), 
+                      measure = c("Eff", "Eigen"), run = 10)
+
+View(tmp$res_table)
+
+View(tmp$res_summary)
+
+robustness_plot <- tmp$plot(linewidth = 1)
+robustness_plot
+
+# statistics for edge removal network efficiency
+tmp1 <- tmp$res_table %>% .[.$remove_strategy == "edge_rand" & .$measure == "Eff", ]
+
+t1 <- trans_env$new(dataset = NULL, add_data = tmp1)
+t1$dataset$sample_table <- t1$data_env
+t1$plot_scatterfit(x = "remove_ratio", y = "value", type = "cor", gcor_method = "spearman", group = "Network", label.x.npc = "center") + 
+    xlab("Ratio of randomly removed edges") + ylab("Network Efficiency") + theme(axis.title = element_text(size = 15))
+
+# statistics for edge removal network connectivity (Eigen)
+tmp1 <- tmp$res_table %>% .[.$remove_strategy == "edge_rand" & .$measure == "Eigen", ]
+
+t1 <- trans_env$new(dataset = NULL, add_data = tmp1)
+t1$dataset$sample_table <- t1$data_env
+t1$plot_scatterfit(x = "remove_ratio", y = "value", type = "cor", cor_method = "spearman", group = "Network", label.x.npc = "center") + 
+    xlab("Ratio of randomly removed edges") + ylab("Network Connectivity") + theme(axis.title = element_text(size = 15))
+
+# statistics for node removal network efficiency
+tmp1 <- tmp$res_table %>% .[.$remove_strategy == "node_rand" & .$measure == "Eff", ]
+
+t1 <- trans_env$new(dataset = NULL, add_data = tmp1)
+t1$dataset$sample_table <- t1$data_env
+t1$plot_scatterfit(x = "remove_ratio", y = "value", type = "cor", cor_method = "spearman", group = "Network", label.x.npc = "center") + 
+    xlab("Ratio of randomly removed nodes") + ylab("Network Efficiency") + theme(axis.title = element_text(size = 15))
+
+# statistics for node removal network connectivity (Eigen)
+tmp1 <- tmp$res_table %>% .[.$remove_strategy == "node_rand" & .$measure == "Eigen", ]
+
+t1 <- trans_env$new(dataset = NULL, add_data = tmp1)
+t1$dataset$sample_table <- t1$data_env
+t1$plot_scatterfit(x = "remove_ratio", y = "value", type = "cor", cor_method = "spearman", group = "Network", label.x.npc = "center") + 
+    xlab("Ratio of randomly removed nodes") + ylab("Network Connectivity") + theme(axis.title = element_text(size = 15))
+```
+
+```{r node vulnerability, message=FALSE, warning=FALSE}
+vul_table <- vulnerability(bp_network)
+View(vul_table)
+
+vul_table2 <- vul_table %>%
+  group_by(Network) %>%
+  summarise(
+    mean_value   = mean(vulnerability, na.rm = TRUE),
+    median_value = median(vulnerability, na.rm = TRUE),
+    sd_value     = sd(vulnerability, na.rm = TRUE),
+    min_value    = min(vulnerability, na.rm = TRUE),
+    max_value    = max(vulnerability, na.rm = TRUE),
+    n_obs        = n())
+```
+
+```{r cohesion, message=FALSE, warning=FALSE}
+# build cohesion class R6 object
+t1 <- cohesionclass$new(bp_network)
+
+# view sample level cohesion
+View(t1$res_list$sample)
+
+# set bp categories as factors
+t1$res_list$sample$network <- factor(
+  t1$res_list$sample$network,
+  levels = c("bp_normal", "Elevated", "Stage1"))
+
+# determine whether there are any differences among groups for each measure
+# use kw to test for significance for positive cohesion
+t1$cal_diff(measure = "c_pos", method = "KW")
+c_pos_results <- t1$res_diff
+
+# view c_pos results
+cohesion <- t1$plot()
+cohesion
+
+# use kw to test for significance for negative cohesion
+c_neg_results <- t1$cal_diff(measure = "c_neg", method = "KW")
+c_neg_results <- t1$res_diff
+
+#view c_neg results
+cohesion2 <- t1$plot()
+cohesion2
+
+# KW is significant, follow up with Dunn’s test to identify which groups differ
+# use kw dunn to test for differences between groups for c_pos
+t1$cal_diff(measure = "c_pos", method = "KW_dunn")
+c_pos_results <- t1$res_diff
+
+# view c_pos results
+cohesion <- t1$plot()
+cohesion
+
+# use kw dunn to test for differences between groups for c_neg
+c_neg_results <- t1$cal_diff(measure = "c_neg", method = "KW_dunn")
+c_neg_results <- t1$res_diff
+
+#view c_neg results
+cohesion2 <- t1$plot()
+cohesion2
+
+# perform pairwise Wilcoxon rank-sum tests between groups to obtain numeric p-values
+# use wilcoxon to extract p_values for significance
+t1$cal_diff(measure = "c_pos", method = "wilcox")
+c_pos_results <- t1$res_diff
+
+# view c_pos results
+cohesion <- t1$plot()
+cohesion
+
+# use wilcoxon to extract p_values for significance
+c_neg_results <- t1$cal_diff(measure = "c_neg", method = "wilcox")
+c_neg_results <- t1$res_diff
+
+#view c_neg results
+cohesion2 <- t1$plot()
+cohesion2
+
+#calculate descriptive statistics
+res_list_sample <- t1$res_list$sample %>%
+  group_by(network) %>%
+  summarise(
+    mean_c_pos = mean(c_pos, na.rm = TRUE),
+    sd_c_pos   = sd(c_pos, na.rm = TRUE),
+    mean_c_neg = mean(c_neg, na.rm = TRUE),
+    sd_c_neg   = sd(c_neg, na.rm = TRUE),
+    n = n())
+res_list_sample
+```
+
+```{r Top 20 Taxa, message=FALSE, warning=FALSE}
+mt2 <- clone(mt)
+
+# Tidy the dataset to align OTU, tax, and sample tables
+mt2$tidy_dataset()
+
+# Normalize counts with trans_norm
+norm_bp <- trans_norm$new(dataset = mt2)
+
+# Apply Total Sum Scaling normalization
+norm_bp_TSS <- norm_bp$norm(method = "TSS")
+
+# Add row names to taxonomy table for downstream analyses
+norm_bp_TSS$add_rownames2taxonomy("ASV")
+
+# Calculate abundance tables at all taxonomic levels
+norm_bp_TSS$cal_abund()
+
+# Inspect the ASV-level relative abundance table
+View(norm_bp_TSS$taxa_abund$ASV)
+
+# Set the bp order and wrapped labels
+norm_bp_TSS$sample_table$bp_cat <- factor(
+  norm_bp_TSS$sample_table$bp_cat,
+  levels = c("Normal", "Elevated", "Stage 1", "Stage 2"))
+  
+# Build the trans_abund object
+# show 40 taxa at Genus level
+top_20_bp <- trans_abund$new(dataset = norm_bp_TSS, taxrank = "ASV", ntaxa = 20)
+top_heat_bp <- top_20_bp$plot_heatmap(facet = "bp_cat", xtext_keep = FALSE, withmargin = FALSE, plot_breaks = c(0.01, 0.1, 1, 10))
+top_heat_bp
+top_heat_bp + theme(axis.text.y = element_text(face = 'italic'))
+
+```
+
+```{r prepare data for correlations of heatmap taxa with LDL levels, warning=FALSE, message=FALSE}
+# extract normalized ASV table
+bp_asv_abund <- norm_bp_TSS$taxa_abund$ASV %>%
+  rownames_to_column() %>%
+  as.data.frame() %>%
+  rename(taxon = rowname)
+
+# view normalized ASV table
+View(bp_asv_abund)
+
+# Split taxa in ldl_asv_abund into separate columns
+bp_asv_abund_separated <- bp_asv_abund %>%
+  separate(
+    col = taxon,
+    into = c("Phylum", "Class", "Order", "Family", "Genus", "Species", "Alt_Genus"),
+    sep = "\\|",
+    fill = "right") %>%
+  select(-"Phylum", -"Class", -"Order", -"Family", -"Genus", -"Species", ) %>%
+  rename(taxon = Alt_Genus)
+
+View(bp_asv_abund_separated)
+
+# read in cross parameter consensus heatmap data
+cross_parameter_consensus <- read_csv("../input_files/all_consensus_filtered.csv") %>%
+  select(taxon)
+
+bp_asv_abund_match_hm <- bp_asv_abund_separated %>%
+  mutate(taxon = case_when(
+    taxon == "s__uncultured_bacterium_87"
+    ~ "f__Lachnospiraceae;g__Eubacterium_ruminantium_group;s__uncultured_bacterium", 
+    taxon == "s__gut_metagenome_14"
+    ~ "f__Oscillospiraceae;g__UCG_002;s__gut_metagenome",
+    taxon == "s__uncultured_bacterium_4_15"
+    ~ "f__Ruminococcaceae;g__CAG_352;s__uncultured_bacterium_4",
+    taxon == "s__uncultured_bacterium_1_22"
+    ~ "g__Akkermansia;s__uncultured_bacterium_1", 
+    taxon == "s__uncultured_bacterium_55"
+    ~ "g__Eggerthella;s__uncultured_bacterium", 
+    taxon == "s__uncultured_organism_23"
+    ~ "g__Izemoplasmatales;s__uncultured_organism",
+    taxon == "s__Lachnospiraceae_bacterium"
+    ~ "g__Lachnospiraceae_UCG_001;s__Lachnospiraceae_bacterium",
+    taxon == "s__metagenome_2_1"
+    ~ "g__Ruminococcus;s__metagenome_2",
+    TRUE ~ taxon))
+  
+correlation_data <- cross_parameter_consensus %>%
+  distinct(taxon, .keep_all = TRUE) %>%  # keep the first instance of each taxon
+  left_join(bp_asv_abund_match_hm, by = "taxon") %>%
+  as.data.frame() %>% 
+  column_to_rownames( var = "taxon") %>%
+  t() %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "sample_id")
+  
+raw_data_bp <- read_csv("../input_files/raw_data_baseline.csv")
+
+correlation_data2 <- left_join(
+  correlation_data,
+  raw_data_bp,
+  by = "sample_id") %>%
+  select(-study,-sex, -age, -age_cat, -bmi, -bmi_cat,
+         -ldl, -ldl_cat, -tc, -tc_cat,
+         -rhi, -rhi_cat)
+
+correlation_data_long <- correlation_data2 %>%
+  pivot_longer(
+    cols = -c(sample_id, sys_press, dia_press, bp_cat),
+    names_to = "taxon",
+    values_to = "relative_abundance")
+```
+
+```{r run correlations for systolic pressure and visualize using ggplot, message=FALSE, warning=FALSE}
+# correlation per taxon (Spearman)
+cor_results_sys <- correlation_data_long %>%
+  group_by(taxon) %>%
+  summarise(
+    cor = cor(sys_press, relative_abundance, method = "spearman", use = "pairwise.complete.obs"),
+    p_value = suppressWarnings(cor.test(sys_press, relative_abundance, method = "spearman")$p.value),
+    .groups = "drop") %>%
+  mutate(
+    p_adj_BH = p.adjust(p_value, method = "BH"),
+    signif = case_when(
+      p_adj_BH <= 0.001 ~ "***",
+      p_adj_BH <= 0.01  ~ "**",
+      p_adj_BH <= 0.05  ~ "*",
+      TRUE ~ ""
+    ),
+    label = paste0(round(cor, 2), "\n", signif)) # combine r + significance
+
+# sort taxa by correlation
+cor_results_sys <- cor_results_sys %>%
+  arrange(cor) %>%
+  mutate(taxon = factor(taxon, levels = taxon))
+
+write_csv(cor_results_sys, 
+          "../output_files/corr_results_sys_bp.csv")
+
+# heatmap of correlations
+heatmap_plot <- ggplot(cor_results_sys, aes(x = 1, y = taxon, fill = cor)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = label), size = 3.5, fontface = "bold") +
+  scale_fill_gradient2(
+    low = "blue", mid = "white", high = "red",
+    midpoint = 0,
+    name = "Spearman r") +
+  labs(
+    x = NULL,
+    y = "Taxa",
+    title = "Correlation of Taxa Abundance with BP") +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(hjust = 0.5))
+
+# export png
+ggsave(
+  filename = "../input_files/bp_taxa_correlation_heatmap_sys.png",
+  plot = heatmap_plot,
+  width = 15,
+  height = 8,
+  dpi = 600,
+  units = "in",
+  bg = "white")
+
+heatmap_plot
+```
+
+```{r run correlations for diastolic pressure and visualize using ggplot, message=FALSE, warning=FALSE}
+# correlation per taxon (Spearman)
+cor_results_dia <- correlation_data_long %>%
+  group_by(taxon) %>%
+  summarise(
+    cor = cor(dia_press, relative_abundance, method = "spearman", use = "pairwise.complete.obs"),
+    p_value = suppressWarnings(cor.test(dia_press, relative_abundance, method = "spearman")$p.value),
+    .groups = "drop") %>%
+  mutate(
+    p_adj_BH = p.adjust(p_value, method = "BH"),
+    signif = case_when(
+      p_adj_BH <= 0.001 ~ "***",
+      p_adj_BH <= 0.01  ~ "**",
+      p_adj_BH <= 0.05  ~ "*",
+      TRUE ~ ""
+    ),
+    label = paste0(round(cor, 2), "\n", signif)) # combine r + significance
+
+# sort taxa by correlation
+cor_results_dia <- cor_results_dia %>%
+  arrange(cor) %>%
+  mutate(taxon = factor(taxon, levels = taxon))
+
+write_csv(cor_results_dia, 
+          "../output_files/corr_results_dia_bp.csv")
+
+# heatmap of correlations
+heatmap_plot2 <- ggplot(cor_results_dia, aes(x = 1, y = taxon, fill = cor)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = label), size = 3.5, fontface = "bold") +
+  scale_fill_gradient2(
+    low = "blue", mid = "white", high = "red",
+    midpoint = 0,
+    name = "Spearman r") +
+  labs(
+    x = NULL,
+    y = "Taxa",
+    title = "Correlation of Taxa Abundance with BP") +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(hjust = 0.5))
+
+# export png
+ggsave(
+  filename = "../input_files/bp_taxa_correlation_heatmap_dia.png",
+  plot = heatmap_plot2,
+  width = 15,
+  height = 8,
+  dpi = 600,
+  units = "in",
+  bg = "white")
+
+heatmap_plot
+```
