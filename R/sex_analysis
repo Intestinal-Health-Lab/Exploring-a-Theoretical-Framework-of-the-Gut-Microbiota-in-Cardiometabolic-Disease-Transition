@@ -1,0 +1,295 @@
+---
+title: "drivers_baseline_sex_analysis"
+author: "SDW"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries, warning=FALSE, messsex=FALSE, echo=FALSE}
+# Load necessary libraries
+library(tidyverse)
+library(MicrobiomeAnalystR)
+library(ecodist)
+library(Cairo)
+```
+
+```{r copy sex input files, warning=FALSE, messsex=FALSE}
+#copy sex feature/taxa table
+file.copy(
+  "../../drivers_baseline_file_handling/output_files/ft_tax_merged.csv", 
+  "../input_files/ft_tax_merged.csv",
+  overwrite = FALSE)
+
+#copy sex metadata
+file.copy(
+  "../../drivers_baseline_file_handling/output_files/bmi_sex_study_age_meta_baseline.csv", 
+  "../input_files/bmi_sex_study_age_meta_baseline.csv",
+  overwrite = FALSE)
+```
+
+```{r create phyloseq object, warning=FALSE, messsex=FALSE}
+# Initiate the mbSetObj
+mbSet<-Init.mbSetObj()
+
+# Set the analysis type
+mbSet<-SetModuleType(mbSet, "mdp")
+
+# Read in the feature/taxonomy table
+mbSet<-Read16SAbundData(mbSet, 
+                        dataName="../input_files/ft_tax_merged.csv", 
+                        format="text",
+                        taxa_type="SILVA", 
+                        ismetafile="F", 
+                        is.normalized = "F")
+
+# Read in the metadata file
+mbSet<-ReadSampleTable(mbSet, "../input_files/bmi_sex_study_age_meta_baseline.csv")
+
+# Data integrity check
+mbSet<-SanityCheckData(mbSet, filetype="text")
+
+# Create phyloseq object
+mbSet<-CreatePhyloseqObj(mbSet, type="text", 
+                         taxa_type="SILVA", 
+                         taxalabel="T", 
+                         isNormInput = FALSE)
+```
+
+```{r low abundance filtering, warning=FALSE, messsex=FALSE}
+# Low abundance filtering, based on the prevalence of features. In this case, by setting the sample percentsex to 0.1, only features with >4 counts in at least 10% of all samples will be retained.
+mbSet<-ApplyAbundanceFilter(mbSet, 
+                            filt.opt="prevalence", 
+                            count=4, 
+                            smpl.perc=0.1)
+```
+
+```{r total sum scaling, warning=FALSE, messsex=FALSE}
+#Normalization with no rarefying, total sum scaling and no transformation
+mbSet<-PerformNormalization(mbSet, 
+                            rare.opt="none", 
+                            scale.opt="colsum", 
+                            transform.opt="none")
+```
+
+```{r observed taxa bar plots phylum, warning=FALSE, messsex=FALSE}
+# Create taxa bar plots for observed abundance phylum level
+#label output with _observed_phylum_sex
+# move to output_files/abundance
+mbSet<-PlotTaxaAundanceBar(mbSet, 
+                      "../output_files/abundance/taxa_abund_observed_phylum_sex",
+                      "Phylum","sex", "null", "barraw",10, "set3", "sum",
+                      10, "bottom", "F", "png")
+```
+
+```{r observed taxa bar plot genus, warning=FALSE, messsex=FALSE}
+# Create taxa bar plots for relative abundance phylum level
+#label output with _observed_genus_sex 
+# move to output_files/abundance
+mbSet<-PlotTaxaAundanceBar(mbSet, 
+                      "../output_files/abundance/taxa_abund_observed_genus_sex",
+                      "Genus","sex", "none", "barraw",10, "set3","sum",
+                      10, "bottom", "F", "png")
+```
+
+```{r relative taxa bar plot phylum, warning=FALSE, messsex=FALSE}
+# Create taxa bar plots for relative abundance phylum level
+#label output with _relative_phylum_sex 
+# move to output_files/abundance
+mbSet<-PlotTaxaAundanceBar(mbSet,
+                           "../output_files/abundance/taxa_abund_relative_phylum_sex",
+                           "Phylum","sex", "none", "barnorm",10, "set3","sum",
+                           10, "bottom", "F", "png")
+```
+
+```{r relative taxa bar plot genus, warning=FALSE, messsex=FALSE}
+# Create taxa bar plots for relative abundance genus level
+#label output with _relative_genus_sex
+# move to output_files/abundance
+mbSet<-PlotTaxaAundanceBar(mbSet,
+                      "../output_files/abundance/taxa_abund_relative_genus_sex",
+                      "Genus","sex", "none", "barnorm",10, "set3","sum",
+                      10, "bottom", "F", "png")
+```
+
+```{r alpha diversity shannons phylum level, warning=FALSE, messsex=FALSE}
+# phylum level alpha diversity measure via Shannons diveristy index
+# rename outputs from PerformAlphaDiversityComp with _shannons_phylum_sex
+# move to output_files/alphadiversity
+mbSet<-PlotAlphaData(mbSet, 
+                     "filt","../output_files/alphadiversity/alpha_diver_shannons_phylum_sex",
+                     "Shannon","sex","Phylum", "default", "png");
+mbSet<-PlotAlphaBoxData(mbSet, 
+                        "../output_files/alphadiversity/alpha_diverbox_shannons_phylum_sex",
+                        "Shannon","sex","default", "png");
+mbSet<-PerformAlphaDiversityComp(mbSet, 
+                                 "nonpar","sex","true");
+ad_phy_sex_sig <- mbSet[["analSet"]][["alpha.stat.info"]];
+ad_phy_sex_sig_df <- as.data.frame(ad_phy_sex_sig);
+write_csv(ad_phy_sex_sig_df, 
+          "../output_files/alphadiversity/ad_phy_sex_sig_shannons.csv")
+```
+
+```{r alpha diversity shannons genus level, warning=FALSE, messsex=FALSE}
+# genus level alpha diversity measured via Shannons diveristy index
+#rename outputs from PerformAlphaDiversityComp with _shannons_genus_sex
+# move to output_files/alphadiversity
+mbSet<-PlotAlphaData(mbSet, 
+                     "filt","../output_files/alphadiversity/alpha_diver_shannons_genus_sex",
+                     "Shannon","sex","Genus", "default", "png");
+mbSet<-PlotAlphaBoxData(mbSet, 
+                        "../output_files/alphadiversity/alpha_diverbox_shannons_genus_sex",
+                        "Shannon","sex","default", "png");
+mbSet<-PerformAlphaDiversityComp(mbSet, 
+                                 "nonpar","sex","true");
+ad_gen_sex_sig <- mbSet[["analSet"]][["alpha.stat.info"]];
+ad_gen_sex_sig_df <- as.data.frame(ad_gen_sex_sig);
+write_csv(ad_gen_sex_sig_df, 
+          "../output_files/alphadiversity/ad_gen_sex_sig_shannons.csv")
+```
+
+```{r alpha diversity Chao1 phylum level, warning=FALSE, messsex=FALSE}
+# phylum level alpha diversity measure via Chao1 diveristy index
+# rename outputs from PerformAlphaDiversityComp with _chao1_phylum_sex
+# move to output_files/alphadiversity
+mbSet<-PlotAlphaData(mbSet, 
+                     "filt","../output_files/alphadiversity/alpha_diver_chao1_phylum_sex",
+                     "Chao1","sex","Phylum", "default", "png");
+mbSet<-PlotAlphaBoxData(mbSet, 
+                        "../output_files/alphadiversity/alpha_diverbox_chao1_phylum_sex",
+                        "Chao1","sex","default", "png");
+mbSet<-PerformAlphaDiversityComp(mbSet, 
+                                 "nonpar","sex","true");
+ad_phy_sex_sig <- mbSet[["analSet"]][["alpha.stat.info"]];
+ad_phy_sex_sig_df <- as.data.frame(ad_phy_sex_sig);
+write_csv(ad_phy_sex_sig_df, 
+          "../output_files/alphadiversity/ad_phy_sex_sig_chao1.csv")
+```
+
+```{r alpha diversity Chao1 genus level, warning=FALSE, messsex=FALSE}
+# genus level alpha diversity measured via Chao1 diveristy index
+#rename outputs from PerformAlphaDiversityComp with _chao1_genus_sex
+# move to output_files/alphadiversity
+mbSet<-PlotAlphaData(mbSet, 
+                     "filt","../output_files/alphadiversity/alpha_diver_chao1_genus_sex",
+                     "Chao1","sex","Genus", "default", "png");
+mbSet<-PlotAlphaBoxData(mbSet, 
+                        "../output_files/alphadiversity/alpha_diverbox_chao1_genus_sex",
+                        "Chao1","sex","default", "png");
+mbSet<-PerformAlphaDiversityComp(mbSet, 
+                                 "nonpar","sex","true");
+ad_gen_sex_sig <- mbSet[["analSet"]][["alpha.stat.info"]];
+ad_gen_sex_sig_df <- as.data.frame(ad_gen_sex_sig);
+write_csv(ad_gen_sex_sig_df, 
+          "../output_files/alphadiversity/ad_gen_sex_sig_chao1.csv")
+```
+
+```{r beta diversity phylum level, warning=FALSE, messsex=FALSE}
+# phylum level beta diversity measured via Bray Curtis Diversity index permanova
+#rename outputs from PerformCategoryComp with _beta_diver_phylum_sex
+set.seed(123)
+mbSet<-PerformBetaDiversity(mbSet,
+                            "../output_files/betadiversity/beta_diver_phylum_sex",
+                            "PCoA","bray","expfac","sex","none","Phylum",
+                            "", "Shannon", "yes", "adonis", "png", 72, 
+                            "default", "true");
+mbSet<-PerformBetaDiversity(mbSet,
+                            "../output_files/betadiversity/beta_diver_phylum_sex_no_ellipse",
+                            "PCoA","bray","expfac","sex","none","Phylum",
+                            "", "Shannon", "no", "adonis", "png", 72, 
+                            "default", "true");
+mbSet<-PCoA3D.Anal(mbSet, 
+                   "PCoA","bray","Phylum","expfac","sex", "","Shannon",
+                   "../output_files/betadiversity/beta_diver3d_phylum_sex.json");
+mbSet<-PerformCategoryComp(mbSet, 
+                           "Phylum", "adonis","bray","sex","true")
+mbSet[["analSet"]][["stat.info.vec"]];
+bd_phy_sex_sig<-mbSet[["analSet"]][["stat.info.vec"]];
+bd_phy_sex_sig_df <- as.data.frame(bd_phy_sex_sig);
+bd_phy_sex_sig_df$row.names <- rownames(bd_phy_sex_sig_df);
+write_csv(bd_phy_sex_sig_df, 
+          "../output_files/betadiversity/beta_diver_phylum_sex_sig.csv");
+```
+
+```{r beta diversity genus level, warning=FALSE, messsex=FALSE}
+# genus level beta diversity measured via Bray Curtis Diversity index permanova
+#rename outputs from PerformCategoryComp with _beta_diver_genus_sex
+set.seed(123)
+mbSet<-PerformBetaDiversity(mbSet, 
+                            "../output_files/betadiversity/beta_diver_genus_sex",
+                            "PCoA","bray","expfac","sex","none","Genus","","Shannon",
+                            "yes", "adonis", "png", 72, "default", "true");
+mbSet<-PerformBetaDiversity(mbSet, 
+                            "../output_files/betadiversity/beta_diver_genus_sex_no_ellipse",
+                            "PCoA","bray","expfac","sex","none","Genus","","Shannon",
+                            "no", "adonis", "png", 72, "default", "true");
+mbSet<-PCoA3D.Anal(mbSet, 
+                   "PCoA","bray","Genus","expfac","sex","","Shannon",
+                   "../output_files/betadiversity/beta_diver3d_genus_sex.json");
+mbSet<-PerformCategoryComp(mbSet, 
+                           "Genus", "adonis","bray","sex","true")
+mbSet[["analSet"]][["stat.info.vec"]];
+bd_gen_sex_sig<-mbSet[["analSet"]][["stat.info.vec"]];
+bd_gen_sex_sig_df <- as.data.frame(bd_gen_sex_sig);
+bd_gen_sex_sig_df$row.names <- rownames(bd_gen_sex_sig_df);
+write_csv(bd_gen_sex_sig_df, 
+          "../output_files/betadiversity/beta_diver_genus_sex_sig.csv")
+```
+
+```{r beta diversity permdisp phylum level, warning=FALSE, messsex=FALSE}
+# phylum level beta diversity measured via Bray Curtis Diversity index permdisp
+#rename outputs from PerformCategoryComp with _permdisp_phylum_sex
+set.seed(123)
+mbSet<-PerformBetaDiversity(mbSet, 
+                            "../output_files/betadiversity/beta_diver_permdisp_phylum_sex",
+                            "PCoA","bray","expfac","sex",
+                            "none","Phylum","", "Shannon", 
+                            "yes", "permdisp", "png", 
+                            72, "default", "false");
+mbSet<-PerformBetaDiversity(mbSet, 
+                            "../output_files/betadiversity/beta_diver_permdisp_phylum_sex_no_ellipse",
+                            "PCoA","bray","expfac","sex",
+                            "none","Phylum","", "Shannon", 
+                            "no", "permdisp", "png", 
+                            72, "default", "false");
+mbSet<-PCoA3D.Anal(mbSet, 
+                   "PCoA","bray","Phylum", "expfac",
+                   "sex", "","Shannon",
+                   "../output_files/betadiversity/beta_diver3d_permdisp_phylum_sex.json");
+mbSet<-PerformCategoryComp(mbSet, 
+                           "Phylum", "permdisp","bray","sex","false")
+mbSet[["analSet"]][["stat.info.vec"]];
+bd_phy_sex_sig_permdisp<-mbSet[["analSet"]][["stat.info.vec"]];
+bd_phy_sex_sig_permdisp_df <- as.data.frame(bd_phy_sex_sig_permdisp);
+bd_phy_sex_sig_permdisp_df$row.names <- rownames(bd_phy_sex_sig_permdisp_df);
+write_csv(bd_phy_sex_sig_permdisp_df, 
+          "../output_files/betadiversity/beta_diver_phylum_sex_sig_permdisp.csv")
+```
+
+```{r beta diversity permdisp genus level, warning=FALSE, messsex=FALSE}
+# genus level beta diversity measured via Bray Curtis Diversity index permdisp
+# rename outputs from PerformCategoryComp with _permdisp_genus_sex
+set.seed(123)
+mbSet<-PerformBetaDiversity(mbSet,
+                        "../output_files/betadiversity/beta_diver_permdisp_genus_sex",
+                        "PCoA","bray","expfac","sex","none","Genus","","Shannon", 
+                        "yes", "permdisp", "png", 72, "default", "false");
+mbSet<-PerformBetaDiversity(mbSet,
+                        "../output_files/betadiversity/beta_diver_permdisp_genus_sex_no_ellipse",
+                        "PCoA","bray","expfac","sex","none","Genus","","Shannon", 
+                        "no", "permdisp", "png", 72, "default", "false");
+mbSet<-PCoA3D.Anal(mbSet, 
+                   "PCoA","bray","Genus","expfac","sex","","Shannon",
+                   "../output_files/betadiversity/beta_diver3d_permdisp_genus_sex.json");
+mbSet<-PerformCategoryComp(mbSet, 
+                           "Genus", "permdisp","bray","sex","false")
+mbSet[["analSet"]][["stat.info.vec"]];
+bd_gen_sex_sig_permdisp<-mbSet[["analSet"]][["stat.info.vec"]];
+bd_gen_sex_sig_permdisp_df <- as.data.frame(bd_gen_sex_sig_permdisp);
+bd_gen_sex_sig_permdisp_df$row.names <- rownames(bd_gen_sex_sig_permdisp_df);
+write_csv(bd_gen_sex_sig_permdisp_df, 
+          "../output_files/betadiversity/beta_diver_genus_sex_sig_permdisp.csv")
+```
