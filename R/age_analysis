@@ -1,0 +1,294 @@
+---
+title: "drivers_baseline_age_analysis"
+author: "SDW"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries, warning=FALSE, message=FALSE, echo=FALSE}
+# Load necessary libraries
+library(tidyverse)
+library(MicrobiomeAnalystR)
+library(ecodist)
+library(Cairo)
+```
+
+```{r copy age input files, warning=FALSE, message=FALSE}
+#copy age feature/taxa table
+file.copy(
+  "../../drivers_baseline_file_handling/output_files/ft_tax_merged.csv", 
+  "../input_files/ft_tax_merged.csv",
+  overwrite = FALSE)
+
+#copy age metadata
+file.copy(
+  "../../drivers_baseline_file_handling/output_files/bmi_sex_study_age_meta_baseline.csv", 
+  "../input_files/bmi_sex_study_age_meta_baseline.csv",
+  overwrite = FALSE)
+```
+
+```{r create phyloseq object, warning=FALSE, message=FALSE}
+# Initiate the mbSetObj
+mbSet<-Init.mbSetObj()
+
+# Set the analysis type
+mbSet<-SetModuleType(mbSet, "mdp")
+
+# Read in the feature/taxonomy table
+mbSet<-Read16SAbundData(mbSet, 
+                        dataName="../input_files/ft_tax_merged.csv", 
+                        format="text",
+                        taxa_type="SILVA", 
+                        ismetafile="F", 
+                        is.normalized = "F")
+
+# Read in the metadata file
+mbSet<-ReadSampleTable(mbSet, "../input_files/bmi_sex_study_age_meta_baseline.csv")
+
+# Data integrity check
+mbSet<-SanityCheckData(mbSet, filetype="text")
+
+# Create phyloseq object
+mbSet<-CreatePhyloseqObj(mbSet, type="text", 
+                         taxa_type="SILVA", 
+                         taxalabel="T", 
+                         isNormInput = FALSE)
+```
+
+```{r low abundance filtering, warning=FALSE, message=FALSE}
+# Low abundance filtering, based on the prevalence of features. In this case, by setting the sample percentage to 0.1, only features with >4 counts in at least 10% of all samples will be retained.
+mbSet<-ApplyAbundanceFilter(mbSet, 
+                            filt.opt="prevalence", 
+                            count=4, 
+                            smpl.perc=0.1)
+```
+
+```{r total sum scaling, warning=FALSE, message=FALSE}
+#Normalization with no rarefying, total sum scaling and no transformation
+mbSet<-PerformNormalization(mbSet, 
+                            rare.opt="none", 
+                            scale.opt="colsum", 
+                            transform.opt="none")
+```
+
+```{r observed taxa bar plots phylum, warning=FALSE, message=FALSE}
+# Create taxa bar plots for observed abundance phylum level
+#label output with _observed_phylum_age
+# move to output_files/abundance
+mbSet<-PlotTaxaAundanceBar(mbSet, 
+                      "../output_files/abundance/taxa_abund_observed_phylum_age",
+                      "Phylum","age_cat", "null", "barraw",10, "set3", "sum",
+                      10, "bottom", "F", "png")
+```
+
+```{r observed taxa bar plot genus, warning=FALSE, message=FALSE}
+# Create taxa bar plots for observed abundance genus level
+#label output with _observed_genus_age
+# move to output_files/abundance
+mbSet<-PlotTaxaAundanceBar(mbSet, 
+                      "../output_files/abundance/taxa_abund_observed_genus_age",
+                      "Genus","age_cat", "none", "barraw",10, "set3","sum",
+                      10, "bottom", "F", "png")
+```
+
+```{r relative taxa bar plot phylum, warning=FALSE, message=FALSE}
+# Create taxa bar plots for relative abundance phylum level
+#label output with _relative_phylum_age
+# move to output_files/abundance
+mbSet<-PlotTaxaAundanceBar(mbSet,
+                           "../output_files/abundance/taxa_abund_relative_phylum_age",
+                           "Phylum","age_cat", "none", "barnorm",10, "set3","sum",
+                           10, "bottom", "F", "png")
+```
+
+```{r relative taxa bar plot genus, warning=FALSE, message=FALSE}
+# Create taxa bar plots for relative abundance genus level
+#label output with _relative_genus_age
+# move to output_files/abundance
+mbSet<-PlotTaxaAundanceBar(mbSet,
+                      "../output_files/abundance/taxa_abund_relative_genus_age",
+                      "Genus","age_cat", "none", "barnorm",10, "set3","sum",
+                      10, "bottom", "F", "png")
+```
+
+```{r alpha shannons diversity phylum level, warning=FALSE, message=FALSE}
+# phylum level alpha diversity measure via Shannons diveristy index
+# rename outputs from PerformAlphaDiversityComp with _shannons_phylum_age
+# move to output_files/alphadiversity
+mbSet<-PlotAlphaData(mbSet, 
+                     "filt","../output_files/alphadiversity/alpha_diver_shannons_phylum_age",
+                     "Shannon","age_cat","Phylum", "default", "png");
+mbSet<-PlotAlphaBoxData(mbSet, 
+                        "../output_files/alphadiversity/alpha_diverbox_shannons_phylum_age",
+                        "Shannon","age_cat","default", "png");
+mbSet<-PerformAlphaDiversityComp(mbSet, 
+                                 "nonpar","age_cat","true");
+ad_phy_age_sig <- mbSet[["analSet"]][["alpha.stat.info"]];
+ad_phy_age_sig_df <- as.data.frame(ad_phy_age_sig);
+write_csv(ad_phy_age_sig_df, 
+          "../output_files/alphadiversity/ad_phy_age_sig_shannons.csv")
+```
+
+```{r alpha diversity shannons genus level, warning=FALSE, message=FALSE}
+# genus level alpha diversity measured via Shannons diveristy index
+#rename outputs from PerformAlphaDiversityComp with _shannons_genus_age
+# move to output_files/alphadiversity
+mbSet<-PlotAlphaData(mbSet, 
+                     "filt","../output_files/alphadiversity/alpha_diver_shannons_genus_age",
+                     "Shannon","age_cat","Genus", "default", "png");
+mbSet<-PlotAlphaBoxData(mbSet, 
+                        "../output_files/alphadiversity/alpha_diverbox_shannons_genus_age",
+                        "Shannon","age_cat","default", "png");
+mbSet<-PerformAlphaDiversityComp(mbSet, 
+                                 "nonpar","age_cat","true");
+ad_gen_age_sig <- mbSet[["analSet"]][["alpha.stat.info"]];
+ad_gen_age_sig_df <- as.data.frame(ad_gen_age_sig);
+write_csv(ad_gen_age_sig_df, 
+          "../output_files/alphadiversity/ad_gen_age_sig_shannons.csv")
+```
+
+```{r alpha chao1 diversity phylum level, warning=FALSE, message=FALSE}
+# phylum level alpha diversity measure via Chao1 diveristy index
+# rename outputs from PerformAlphaDiversityComp with _chao1_phylum_age
+# move to output_files/alphadiversity
+mbSet<-PlotAlphaData(mbSet, 
+                     "filt","../output_files/alphadiversity/alpha_diver_chao1_phylum_age",
+                     "Chao1","age_cat","Phylum", "default", "png");
+mbSet<-PlotAlphaBoxData(mbSet, 
+                        "../output_files/alphadiversity/alpha_diverbox_chao1_phylum_age",
+                        "Chao1","age_cat","default", "png");
+mbSet<-PerformAlphaDiversityComp(mbSet, 
+                                 "nonpar","age_cat","true");
+ad_phy_age_sig <- mbSet[["analSet"]][["alpha.stat.info"]];
+ad_phy_age_sig_df <- as.data.frame(ad_phy_age_sig);
+write_csv(ad_phy_age_sig_df, 
+          "../output_files/alphadiversity/ad_phy_age_sig_chao1.csv")
+```
+
+```{r alpha diversity chao1 genus level, warning=FALSE, message=FALSE}
+# genus level alpha diversity measured via Chao1 diveristy index
+#rename outputs from PerformAlphaDiversityComp with _chao1_genus_age
+mbSet<-PlotAlphaData(mbSet, 
+                     "filt","../output_files/alphadiversity/alpha_diver_chao1_genus_age",
+                     "Chao1","age_cat","Genus", "default", "png");
+mbSet<-PlotAlphaBoxData(mbSet, 
+                        "../output_files/alphadiversity/alpha_diverbox_chao1_genus_age",
+                        "Chao1","age_cat","default", "png");
+mbSet<-PerformAlphaDiversityComp(mbSet, 
+                                 "nonpar","age_cat","true");
+ad_gen_age_sig <- mbSet[["analSet"]][["alpha.stat.info"]];
+ad_gen_age_sig_df <- as.data.frame(ad_gen_age_sig);
+write_csv(ad_gen_age_sig_df, 
+          "../output_files/alphadiversity/ad_gen_age_sig_chao1.csv")
+```
+
+```{r beta diversity phylum level, warning=FALSE, message=FALSE}
+# phylum level beta diversity measured via Bray Curtis Diversity index permanova
+#rename outputs from PerformCategoryComp with _beta_diver_phylum_age
+set.seed(123)
+mbSet<-PerformBetaDiversity(mbSet,
+                            "../output_files/betadiversity/beta_diver_phylum_age",
+                            "PCoA","bray","expfac","age_cat","none","Phylum",
+                            "", "Shannon", "yes", "adonis", "png", 72, 
+                            "default", "true");
+mbSet<-PerformBetaDiversity(mbSet,
+                            "../output_files/betadiversity/beta_diver_phylum_age_no_ellipse",
+                            "PCoA","bray","expfac","age_cat","none","Phylum",
+                            "", "Shannon", "no", "adonis", "png", 72, 
+                            "default", "true");
+mbSet<-PCoA3D.Anal(mbSet, 
+                   "PCoA","bray","Phylum","expfac","age_cat", "","Shannon",
+                   "../output_files/betadiversity/beta_diver3d_phylum_age.json"); 
+mbSet<-PerformCategoryComp(mbSet, 
+                           "Phylum", "adonis","bray","age_cat","true")
+mbSet[["analSet"]][["stat.info.vec"]];
+bd_phy_age_sig<-mbSet[["analSet"]][["stat.info.vec"]];
+bd_phy_age_sig_df <- as.data.frame(bd_phy_age_sig);
+bd_phy_age_sig_df$row.names <- rownames(bd_phy_age_sig_df);
+write_csv(bd_phy_age_sig_df, 
+          "../output_files/betadiversity/beta_diver_phylum_age_sig.csv");
+```
+
+```{r beta diversity genus level, warning=FALSE, message=FALSE}
+# genus level beta diversity measured via Bray Curtis Diversity index permanova
+#rename outputs from PerformCategoryComp with _beta_diver_genus_age
+set.seed(123)
+mbSet<-PerformBetaDiversity(mbSet, 
+                            "../output_files/betadiversity/beta_diver_genus_age",
+                            "PCoA","bray","expfac","age_cat","none","Genus","","Shannon",
+                            "yes", "adonis", "png", 72, "default", "true");
+mbSet<-PerformBetaDiversity(mbSet, 
+                            "../output_files/betadiversity/beta_diver_genus_age_no_ellipse",
+                            "PCoA","bray","expfac","age_cat","none","Genus","","Shannon",
+                            "no", "adonis", "png", 72, "default", "true");
+mbSet<-PCoA3D.Anal(mbSet, 
+                   "PCoA","bray","Genus","expfac","age_cat","","Shannon",
+                   "../output_files/betadiversity/beta_diver3d_genus_age.json");
+mbSet<-PerformCategoryComp(mbSet, 
+                           "Genus", "adonis","bray","age_cat","true")
+mbSet[["analSet"]][["stat.info.vec"]];
+bd_gen_age_sig<-mbSet[["analSet"]][["stat.info.vec"]];
+bd_gen_age_sig_df <- as.data.frame(bd_gen_age_sig);
+bd_gen_age_sig_df$row.names <- rownames(bd_gen_age_sig_df);
+write_csv(bd_gen_age_sig_df, 
+          "../output_files/betadiversity/beta_diver_genus_age_sig.csv")
+```
+
+```{r beta diversity permdisp phylum level, warning=FALSE, message=FALSE}
+# phylum level beta diversity measured via Bray Curtis Diversity index permdisp
+#rename outputs from PerformCategoryComp with _permdisp_phylum_age
+set.seed(123)
+mbSet<-PerformBetaDiversity(mbSet, 
+                            "../output_files/betadiversity/beta_diver_permdisp_phylum_age",
+                            "PCoA","bray","expfac","age_cat",
+                            "none","Phylum","", "Shannon", 
+                            "yes", "permdisp", "png", 
+                            72, "default", "false");
+mbSet<-PerformBetaDiversity(mbSet, 
+                            "../output_files/betadiversity/beta_diver_permdisp_phylum_age_no_ellipse",
+                            "PCoA","bray","expfac","age_cat",
+                            "none","Phylum","", "Shannon", 
+                            "no", "permdisp", "png", 
+                            72, "default", "false");
+mbSet<-PCoA3D.Anal(mbSet, 
+                   "PCoA","bray","Phylum", "expfac",
+                   "age_cat", "","Shannon",
+                   "../output_files/betadiversity/beta_diver3d_permdisp_phylum_age.json");
+mbSet<-PerformCategoryComp(mbSet, 
+                           "Phylum", "permdisp","bray","age_cat","false")
+mbSet[["analSet"]][["stat.info.vec"]];
+bd_phy_age_sig_permdisp<-mbSet[["analSet"]][["stat.info.vec"]];
+bd_phy_age_sig_permdisp_df <- as.data.frame(bd_phy_age_sig_permdisp);
+bd_phy_age_sig_permdisp_df$row.names <- rownames(bd_phy_age_sig_permdisp_df);
+write_csv(bd_phy_age_sig_permdisp_df, 
+          "../output_files/betadiversity/beta_diver_phylum_age_sig_permdisp.csv")
+```
+
+```{r beta diversity permdisp genus level, warning=FALSE, message=FALSE}
+# genus level beta diversity measured via Bray Curtis Diversity index permdisp
+# rename outputs from PerformCategoryComp with _permdisp_genus_age
+set.seed(123)
+mbSet<-PerformBetaDiversity(mbSet,
+                        "../output_files/betadiversity/beta_diver_permdisp_genus_age",
+                        "PCoA","bray","expfac","age_cat","none","Genus","","Shannon", 
+                        "yes", "permdisp", "png", 72, "default", "false");
+mbSet<-PerformBetaDiversity(mbSet,
+                        "../output_files/betadiversity/beta_diver_permdisp_genus_age_no_ellipse",
+                        "PCoA","bray","expfac","age_cat","none","Genus","","Shannon", 
+                        "no", "permdisp", "png", 72, "default", "false");
+mbSet<-PCoA3D.Anal(mbSet, 
+                   "PCoA","bray","Genus","expfac","age_cat","","Shannon",
+                   "../output_files/betadiversity/beta_diver3d_permdisp_genus_age.json");
+mbSet<-PerformCategoryComp(mbSet, 
+                           "Genus", "permdisp","bray","age_cat","false")
+mbSet[["analSet"]][["stat.info.vec"]];
+bd_gen_age_sig_permdisp<-mbSet[["analSet"]][["stat.info.vec"]];
+bd_gen_age_sig_permdisp_df <- as.data.frame(bd_gen_age_sig_permdisp);
+bd_gen_age_sig_permdisp_df$row.names <- rownames(bd_gen_age_sig_permdisp_df);
+write_csv(bd_gen_age_sig_permdisp_df, 
+          "../output_files/betadiversity/beta_diver_genus_age_sig_permdisp.csv")
+```
