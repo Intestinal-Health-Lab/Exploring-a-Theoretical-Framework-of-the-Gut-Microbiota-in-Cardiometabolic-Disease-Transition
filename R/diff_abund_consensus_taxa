@@ -1,0 +1,665 @@
+---
+title: "consensus_comparisons"
+author: "SDW"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+set.seed(123)
+```
+
+```{r copy consensus input files, warning=TRUE, message=TRUE}
+#copy ldl consensus taxa from ldl file analyses directory
+file.copy(
+  "../../drivers_baseline_ldl_analysis/output_files/consensus_taxa_results.csv", 
+  "../input_files/consensus_taxa_results_ldl.csv",
+  overwrite = TRUE)
+
+#copy full taxonomy file from ldl input directory
+file.copy(
+  "../../drivers_baseline_ldl_analysis/input_files/filtered_tax_table_all.csv", 
+  "../input_files/filtered_tax_table_all_ldl.csv",
+  overwrite = TRUE)
+
+#copy tc consensus taxa from tc file analyses directory
+file.copy(
+  "../../drivers_baseline_tc_analysis/output_files/consensus_taxon_results.csv", 
+  "../input_files/consensus_taxa_results_tc.csv",
+  overwrite = TRUE)
+
+#copy full taxonomy file from tc input directory
+file.copy(
+  "../../drivers_baseline_tc_analysis/input_files/filtered_tax_table_all.csv", 
+  "../input_files/filtered_tax_table_all_tc.csv",
+  overwrite = TRUE)
+
+#copy bp consensus taxa from bp file analyses directory
+file.copy(
+  "../../drivers_baseline_bp_analysis/output_files/consensus_taxon_results.csv", 
+  "../input_files/consensus_taxa_results_bp.csv",
+  overwrite = TRUE)
+
+#copy full taxonomy file from bp input directory
+file.copy(
+  "../../drivers_baseline_bp_analysis/input_files/filtered_tax_table_all.csv", 
+  "../input_files/filtered_tax_table_all_bp.csv",
+  overwrite = TRUE)
+
+#copy rhi consensus taxa from rhi file analyses directory
+file.copy(
+  "../../drivers_baseline_rhi_analysis/output_files/consensus_taxon_results.csv", 
+  "../input_files/consensus_taxa_results_rhi.csv",
+  overwrite = TRUE)
+
+#copy full taxonomy file from rhi input directory
+file.copy(
+  "../../drivers_baseline_rhi_analysis/input_files/filtered_tax_table_all.csv", 
+  "../input_files/filtered_tax_table_all_rhi.csv",
+  overwrite = TRUE)
+
+#copy bmi consensus taxa from bmi file analyses directory
+file.copy(
+  "../../drivers_baseline_bmi_analysis/output_files/consensus_taxon_results.csv", 
+  "../input_files/consensus_taxa_results_bmi.csv",
+  overwrite = TRUE)
+
+#copy full taxonomy file from bmi input directory
+file.copy(
+  "../../drivers_baseline_bmi_analysis/input_files/filtered_tax_table_all.csv", 
+  "../input_files/filtered_tax_table_all_bmi.csv",
+  overwrite = TRUE)
+```
+
+```{r filter ldl consensus data and visualize, warning=FALSE, message=FALSE}
+# load ldl_consensus file
+ldl_consensus <- read_csv("../input_files/consensus_taxa_results_ldl.csv")
+
+# load ldl full taxa file
+ldl_full_taxa <- read_csv("../input_files/filtered_tax_table_all_ldl.csv") %>%
+  select(taxa, Phylum, Class, Order, Family, Genus, Species) %>%
+  rename(taxon = taxa)
+
+# Filter taxa with conflicting coefficients
+filtered_ldl_consensus <- ldl_consensus %>%
+  group_by(taxon, comparison) %>%
+  mutate(
+    coefficient_sign = sign(coefficient), # Get the sign of each coefficient
+    consistent = n_distinct(coefficient_sign) == 1) %>% # Check if all signs are the same
+  filter(consistent) %>% # Keep only consistent taxa
+  select(-coefficient_sign, -consistent) # Remove helper columns
+
+# inner join filtered consensus and full taxa files
+filtered_ldl_consensus <- filtered_ldl_consensus %>%
+  inner_join(ldl_full_taxa, by = "taxon")
+
+# Match taxon id with taxonomy from LDL full taxonomy file
+filtered_ldl_consensus <- filtered_ldl_consensus %>%
+  mutate(
+    taxon = case_when(
+      taxon == "s__Azospirillum_sp_"                 
+      ~ "o__Rhodospirillales;f__uncultured",
+      taxon == "s__gut_metagenome_14"
+      ~ "f__Oscillospiraceae;g__UCG_002;s__gut_metagenome",
+      taxon == "s__uncultured_bacterium_4_15"
+      ~ "f__Ruminococcaceae;g__CAG_352;s__uncultured_bacterium_4",
+      taxon == "s__uncultured_bacterium_55"
+      ~ "g__Eggerthella;s__uncultured_bacterium",
+      taxon == "s__uncultured_organism_23"
+      ~ "g__Akkermansia;s__uncultured_organism",
+      taxon == "s__unidentified_1_2"
+      ~ "g__Coprococcus;s__unidentified_1",
+      TRUE                                          ~ taxon))
+  
+# Save the filtered data to a new file
+write_csv(filtered_ldl_consensus, 
+          "../output_files/ldl_consensus_taxa/filtered_ldl_consensus_taxa.csv")
+
+# LDL comparisons as a factor
+filtered_ldl_consensus <- filtered_ldl_consensus %>%
+  mutate(
+    comparison = factor(comparison, levels = c("Above Optimal_vs_Normal", 
+                                               "Borderline High_vs_Normal", 
+                                               "High_vs_Normal", 
+                                               "Borderline High_vs_Above Optimal",
+                                               "High_vs_Above Optimal",
+                                               "High_vs_Borderline High")))
+
+# Break long taxa names into multiple lines
+filtered_ldl_consensus$taxon <- gsub("(s__.*)", "\n\\1", filtered_ldl_consensus$taxon)
+
+# Generate a full grid for consistent spacing
+grid_data <- expand.grid(
+  comparison = unique(filtered_ldl_consensus$comparison),
+  taxon = unique(filtered_ldl_consensus$taxon))
+
+# Create the heatmap
+ldl_consensus_hm <- ggplot(filtered_ldl_consensus, 
+                           aes(x = comparison, y = taxon, fill = method_count)) +
+  geom_tile(color = "black", size = 0.5) +  # Add black borders around every tile
+  geom_tile(data = grid_data, aes(x = comparison, y = taxon),
+            fill = NA, color = "black", size = 0.5) +  # Outline grid spaces
+  scale_fill_gradient(
+    low = "blue", high = "red", name = "Method Count",
+    limits = c(0, 4),  # Adjust scale range as needed
+    breaks = seq(0, 4, by = 1)) +  # Customize legend ticks
+  labs(
+    title = "Low Density Lipoprotein Consensus Taxa",
+    x = "Comparison",
+    y = "Taxon") +
+  theme_minimal() +  # Use a clean theme
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels
+    axis.text.y = element_text(size = 8),  # Adjust y-axis text size
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),  # Enhance title
+    panel.grid = element_blank(),  # Remove default gridlines
+    panel.border = element_blank()) +  # Remove panel border (already clean)
+  coord_fixed() # Ensure square tiles and proper alignment
+ 
+
+# Save the heatmap as a PNG file
+ggsave("../output_files/ldl_consensus_taxa/ldl_consensus_heatmap.png", 
+       ldl_consensus_hm, width = 10, height = 10, dpi = 300)
+
+ldl_consensus_hm
+```
+
+```{r filter tc consensus data and visualize, warning=FALSE, message=FALSE}
+# load tc_consensus file
+tc_consensus <- read_csv("../input_files/consensus_taxa_results_tc.csv")
+
+# load tc full taxa file
+tc_full_taxa <- read_csv("../input_files/filtered_tax_table_all_tc.csv") %>%
+  select(taxa, Phylum, Class, Order, Family, Genus, Species) %>%
+  rename(taxon = taxa)
+
+# Filter taxa with conflicting coefficients
+filtered_tc_consensus <- tc_consensus %>%
+  group_by(taxon, comparison) %>%
+  mutate(
+    coefficient_sign = sign(coefficient), # Get the sign of each coefficient
+    consistent = n_distinct(coefficient_sign) == 1) %>% # Check if all signs are the same
+  filter(consistent) %>% # Keep only consistent taxa
+  select(-coefficient_sign, -consistent) # Remove helper columns
+
+# inner join filtered consensus and full taxa files
+filtered_tc_consensus <- filtered_tc_consensus %>%
+  inner_join(tc_full_taxa, by = "taxon")
+
+# Match taxon id with taxonomy from TC full taxonomy file
+filtered_tc_consensus <- filtered_tc_consensus %>%
+  mutate(
+    taxon = case_when(
+      taxon == "s__gut_metagenome_14"                  
+      ~ "f__Oscillospiraceae;g__UCG_002;s__gut_metagenome",
+      taxon == "s__Lachnospiraceae_bacterium"                  
+      ~ "g__Lachnospiraceae_UCG_001;s__Lachnospiraceae_bacterium",
+      taxon == "s__uncultured_bacterium_4_15"                 
+      ~ "f__Ruminococcaceae;g__CAG_352;s__uncultured_bacterium_4",
+      taxon == "s__uncultured_bacterium_87"                 
+      ~ "f__Lachnospiraceae;g__Eubacterium_ruminantium_group;s__uncultured_bacterium",
+      TRUE                                          ~ taxon))
+
+# Save the filtered data to a new file
+write_csv(filtered_tc_consensus, 
+          "../output_files/tc_consensus_taxa/filtered_tc_consensus_taxa.csv")
+
+# TC comparisons as a factor
+filtered_tc_consensus <- filtered_tc_consensus %>%
+  mutate(
+    comparison = factor(comparison, levels = c("Borderline High_vs_Desirable", 
+                                               "High_vs_Desirable", 
+                                               "High_vs_Borderline High")))
+
+# Break long taxa names into multiple lines
+filtered_tc_consensus$taxon <- gsub("(s__.*)", "\n\\1", filtered_tc_consensus$taxon)
+
+# Create the heatmap with full gridlines and outlined spaces
+tc_consensus_hm <- ggplot(filtered_tc_consensus, 
+                          aes(x = comparison, y = taxon, fill = method_count)) +
+  geom_tile(color = "black", size = 0.5) + # Add black borders around every tile
+  geom_tile(data = expand.grid(
+    comparison = unique(filtered_tc_consensus$comparison),
+    taxon = unique(filtered_tc_consensus$taxon)), 
+    aes(x = comparison, y = taxon), 
+    fill = NA, color = "black", size = 0.5) + # Add a grid for all spaces (consistent size)
+  scale_fill_gradient(
+    low = "blue", high = "red", name = "Method Count",
+    limits = c(0, 4), # Adjust scale range as needed
+    breaks = seq(0, 4, by = 1)) + # Customize legend ticks
+  labs(
+    title = "Total Cholesterol Consensus Taxa",
+    x = "Comparison",
+    y = "Taxon") +
+  theme_minimal() + # Use a clean theme
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x-axis labels
+    axis.text.y = element_text(size = 8), # Adjust y-axis text size
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5), # Enhance title
+    panel.grid = element_blank(), # Remove default gridlines
+    panel.border = element_blank()) + # Remove panel border (already clean)
+  coord_fixed() # Ensure square tiles and proper alignment
+
+# Save the heatmap as a PNG file
+ggsave(
+  filename = "../output_files/tc_consensus_taxa/tc_consensus_taxa_heatmap.png", # Output file name
+  plot = tc_consensus_hm, # The plot to save
+  width = 10, # Width in inches
+  height = 8, # Height in inches
+  dpi = 300,  # Resolution (dots per inch)
+  bg = "white") # Set background
+
+tc_consensus_hm
+```
+
+```{r filter rhi consensus data and visualize, warning=FALSE, message=FALSE}
+# load rhi_consensus file
+rhi_consensus <- read_csv("../input_files/consensus_taxa_results_rhi.csv")
+
+# load rhi full taxa file
+rhi_full_taxa <- read_csv("../input_files/filtered_tax_table_all_rhi.csv") %>%
+  select(taxa, Phylum, Class, Order, Family, Genus, Species) %>%
+  rename(taxon = taxa)
+
+# Filter taxa with conflicting coefficients
+filtered_rhi_consensus <- rhi_consensus %>%
+  group_by(taxon, comparison) %>%
+  mutate(
+    coefficient_sign = sign(coefficient), # Get the sign of each coefficient
+    consistent = n_distinct(coefficient_sign) == 1 # Check if all signs are the same
+  ) %>%
+  filter(consistent) %>% # Keep only consistent taxa
+  select(-coefficient_sign, -consistent) # Remove helper columns
+
+# inner join filtered consensus and full taxa files
+filtered_rhi_consensus <- filtered_rhi_consensus %>%
+  inner_join(rhi_full_taxa, by = "taxon")
+
+# Separate the 'taxon' column into multiple taxonomy levels
+filtered_rhi_consensus <- filtered_rhi_consensus %>%
+  mutate(
+    taxon = case_when(
+      taxon == "s__Ruminococcus_sp_"                  
+      ~ "g__Blautia",
+      taxon == "s__uncultured_organism_20"                 
+      ~ "g__Izemoplasmatales;s__uncultured_organism",
+      taxon == "s__uncultured_organism_23"                 
+      ~ "g__Lachnospiraceae_FCS020_group;s__uncultured_organism",
+      TRUE                                          ~ taxon))
+
+# Save the filtered data to a new file
+write_csv(filtered_rhi_consensus, 
+          "../output_files/rhi_consensus_taxa/filtered_rhi_consensus_taxa.csv")
+
+# Break long taxa names into multiple lines
+filtered_rhi_consensus$taxon <- gsub("(s__.*)", "\n\\1", filtered_rhi_consensus$taxon)
+
+# Create the heatmap with full gridlines and outlined spaces
+rhi_consenses_hm <- ggplot(filtered_rhi_consensus, 
+                          aes(x = comparison, y = taxon, fill = method_count)) +
+  geom_tile(color = "black", size = 0.5) + # Add black borders around every tile
+  geom_tile(data = expand.grid(
+    comparison = unique(filtered_rhi_consensus$comparison),
+    taxon = unique(filtered_rhi_consensus$taxon)), 
+    aes(x = comparison, y = taxon), 
+    fill = NA, color = "black", size = 0.5) + # Add a grid for all spaces (consistent size)
+  scale_fill_gradient(
+    low = "blue", high = "red", name = "Method Count",
+    limits = c(0, 4), # Adjust scale range as needed
+    breaks = seq(0, 4, by = 1)) + # Customize legend ticks
+  labs(
+    title = "Reactive Hyperemia Index Consensus Taxa",
+    x = "Comparison",
+    y = "Taxon") +
+  theme_minimal() + # Use a clean theme
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x-axis labels
+    axis.text.y = element_text(size = 8), # Adjust y-axis text size
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5), # Enhance title
+    panel.grid = element_blank(), # Remove default gridlines
+    panel.border = element_blank()) + # Remove panel border (already clean)
+  coord_fixed() # Ensure square tiles and proper alignment
+
+# Save the heatmap as a PNG file
+ggsave(
+  filename = "../output_files/rhi_consensus_taxa/rhi_consensus_taxa_heatmap.png", # Output file name
+  plot = rhi_consenses_hm, # The plot to save
+  width = 10, # Width in inches
+  height = 8, # Height in inches
+  dpi = 300,  # Resolution (dots per inch)
+  bg = "white") # Set background
+
+rhi_consenses_hm
+```
+
+```{r filter bp consensus data and visualize, warning=FALSE, message=FALSE}
+# load bp_consensus file
+bp_consensus <- read_csv("../input_files/consensus_taxa_results_bp.csv")
+
+# load bp full taxa file
+bp_full_taxa <- read_csv("../input_files/filtered_tax_table_all_bp.csv") %>%
+  select(taxa, Phylum, Class, Order, Family, Genus, Species) %>%
+  rename(taxon = taxa)
+
+# Filter taxa with conflicting coefficients
+filtered_bp_consensus <- bp_consensus %>%
+  group_by(taxon, comparison) %>%
+  mutate(
+    coefficient_sign = sign(coefficient), # Get the sign of each coefficient
+    consistent = n_distinct(coefficient_sign) == 1 # Check if all signs are the same
+  ) %>%
+  filter(consistent) %>% # Keep only consistent taxa
+  select(-coefficient_sign, -consistent) # Remove helper columns
+
+# inner join filtered consensus and full taxa files
+filtered_bp_consensus <- filtered_bp_consensus %>%
+  inner_join(bp_full_taxa, by = "taxon")
+
+# Separate the 'taxon' column into multiple taxonomy levels
+filtered_bp_consensus <- filtered_bp_consensus %>%
+  mutate(
+    taxon = case_when(
+           taxon == "g__uncultured_14" 
+      ~ "f__Eggerthellaceae;g__uncultured",
+      taxon == "g__uncultured_18" 
+      ~ "f__Ruminococcaceae;g__uncultured_18",
+      taxon == "s__gut_metagenome_8" 
+      ~ "g__Clostridia_UCG_014;s__gut_metagenome_8",
+      taxon == "s__Lachnospiraceae_bacterium" 
+      ~ "g__Lachnospiraceae_UCG_001;s__Lachnospiraceae_bacterium",
+      taxon == "s__Lachnospiraceae_bacterium_1_1" 
+      ~ "g__Coprococcus;s__Lachnospiraceae_bacterium_1",
+      taxon == "s__Ruminococcus_sp_" 
+      ~ "g__Blautia",
+      taxon == "s__uncultured_bacterium_1_22" 
+      ~ "g__Akkermansia;s__uncultured_bacterium_1",
+       taxon == "s__uncultured_bacterium_87" 
+      ~ "f__Lachnospiraceae;g__Eubacterium_ruminantium_group;s__uncultured_bacterium",
+      taxon == "s__uncultured_organism_1_6" 
+      ~ "f__Oscillospiraceae;g__UCG_005;s__uncultured_organism_1",
+      taxon == "s__uncultured_organism_23" 
+      ~ "g__Izemoplasmatales;s__uncultured_organism",
+      taxon == "s__uncultured_organism_38" 
+      ~ "f__Lachnospiraceae;g__Eubacterium_hallii_group;s__uncultured_organism",
+      taxon == "s__uncultured_Roseburia" 
+      ~ "g__Roseburia;s__uncultured_Roseburia",
+      TRUE                                          ~ taxon))
+  
+# Save the filtered data to a new file
+write_csv(filtered_bp_consensus, 
+          "../output_files/bp_consensus_taxa/filtered_bp_consensus_taxa.csv")
+
+# BP comparisons as a factor
+filtered_bp_consensus <- filtered_bp_consensus %>%
+  mutate(
+    comparison = factor(comparison, levels = c("Elevated_vs_Normal", 
+                                               "Stage 1_vs_Normal", 
+                                               "Stage 2_vs_Normal",
+                                               "Stage 1_vs_Elevated",
+                                               "Stage 2_vs_Elevated",
+                                               "Stage 2_vs_Stage 1")))
+
+# Break long taxa names into multiple lines
+filtered_bp_consensus$taxon <- gsub("(s__.*)", "\n\\1", filtered_bp_consensus$taxon)
+
+# Create the heatmap
+bp_consensus_hm <- ggplot(filtered_bp_consensus, 
+                          aes(x = comparison, y = taxon, fill = method_count)) +
+  geom_tile(color = "black", size = 0.5) + # Add black borders around every tile
+  geom_tile(data = expand.grid(
+    comparison = unique(filtered_bp_consensus$comparison),
+    taxon = unique(filtered_bp_consensus$taxon)), 
+    aes(x = comparison, y = taxon), 
+    fill = NA, color = "black", size = 0.5) + # Add a grid for all spaces (consistent size)
+  scale_fill_gradient(
+    low = "blue", high = "red", name = "Method Count",
+    limits = c(0, 4), # Adjust scale range as needed
+    breaks = seq(0, 4, by = 1)) + # Customize legend ticks
+  labs(
+    title = "Blood Pressure Consensus Taxa",
+    x = "Comparison",
+    y = "Taxon") +
+  theme_minimal() + # Use a clean theme
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x-axis labels
+    axis.text.y = element_text(size = 8), # Adjust y-axis text size
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5), # Enhance title
+    panel.grid = element_blank(), # Remove default gridlines
+    panel.border = element_blank()) + # Remove panel border (already clean)
+  coord_fixed() # Ensure square tiles and proper alignment
+
+# Save the heatmap as a PNG file
+ggsave(
+  filename = "../output_files/bp_consensus_taxa/bp_consensus_taxa_heatmap.png", # Output file name
+  plot = bp_consensus_hm, # The plot to save
+  width = 10, # Width in inches
+  height = 8, # Height in inches
+  dpi = 300,  # Resolution (dots per inch)
+  bg = "white") # Set background
+
+bp_consensus_hm
+```
+
+```{r filter bmi consensus data and visualize, warning=FALSE, message=FALSE}
+# load bmi_consensus file
+bmi_consensus <- read_csv("../input_files/consensus_taxa_results_bmi.csv")
+
+# load bmi full taxa file
+bmi_full_taxa <- read_csv("../input_files/filtered_tax_table_all_bmi.csv") %>%
+  select(taxa, Phylum, Class, Order, Family, Genus, Species) %>%
+  rename(taxon = taxa)
+
+# Filter taxa with conflicting coefficients
+filtered_bmi_consensus <- bmi_consensus %>%
+  group_by(taxon, comparison) %>%
+  mutate(
+    coefficient_sign = sign(coefficient), # Get the sign of each coefficient
+    consistent = n_distinct(coefficient_sign) == 1 # Check if all signs are the same
+  ) %>%
+  filter(consistent) %>% # Keep only consistent taxa
+  select(-coefficient_sign, -consistent) # Remove helper columns
+
+# inner join filtered consensus and full taxa files
+filtered_bmi_consensus <- filtered_bmi_consensus %>%
+  inner_join(bmi_full_taxa, by = "taxon")
+
+# Separate the 'taxon' column into multiple taxonomy levels
+filtered_bmi_consensus <- filtered_bmi_consensus %>%
+  mutate(
+    taxon = case_when(
+      taxon == "s__metagenome_2_1"
+      ~ "g__Ruminococcus;s__metagenome_2",
+      taxon == "s__uncultured_bacterium_1_31"
+      ~ "g__Paraprevotella;s__uncultured_bacterium_1",
+      taxon == "s__uncultured_bacterium_4_15"
+      ~ "f__Ruminococcaceae;g__CAG_352;s__uncultured_bacterium_4",
+         taxon == "s__uncultured_bacterium_55"
+      ~ "g__Eggerthella;s__uncultured_bacterium",
+      TRUE                                          ~ taxon))
+  
+# Save the filtered data to a new file
+write_csv(filtered_bmi_consensus, 
+          "../output_files/bmi_consensus_taxa/filtered_bmi_consensus_taxa.csv")
+
+# BMI comparisons as a factor
+filtered_bmi_consensus <- filtered_bmi_consensus %>%
+  mutate(
+    comparison = factor(comparison, levels = c("Overweight_vs_Normal", 
+                                               "Obese_vs_Normal", 
+                                               "Obese_vs_Overweight")))
+
+# Break long taxa names into multiple lines
+filtered_bmi_consensus$taxon <- gsub("(s__.*)", "\n\\1", filtered_bmi_consensus$taxon)
+
+# Create the heatmap
+bmi_consensus_hm <- ggplot(filtered_bmi_consensus, 
+                          aes(x = comparison, y = taxon, fill = method_count)) +
+  geom_tile(color = "black", size = 0.5) + # Add black borders around every tile
+  geom_tile(data = expand.grid(
+    comparison = unique(filtered_bmi_consensus$comparison),
+    taxon = unique(filtered_bmi_consensus$taxon)), 
+    aes(x = comparison, y = taxon), 
+    fill = NA, color = "black", size = 0.5) + # Add a grid for all spaces (consistent size)
+  scale_fill_gradient(
+    low = "blue", high = "red", name = "Method Count",
+    limits = c(0, 4), # Adjust scale range as needed
+    breaks = seq(0, 4, by = 1)) + # Customize legend ticks
+  labs(
+    title = "Body Mass Index Consensus Taxa",
+    x = "Comparison",
+    y = "Taxon") +
+  theme_minimal() + # Use a clean theme
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x-axis labels
+    axis.text.y = element_text(size = 8), # Adjust y-axis text size
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5), # Enhance title
+    panel.grid = element_blank(), # Remove default gridlines
+    panel.border = element_blank()) + # Remove panel border (already clean)
+  coord_fixed() # Ensure square tiles and proper alignment
+
+# Save the heatmap as a PNG file
+ggsave(
+  filename = "../output_files/bmi_consensus_taxa/bmi_consensus_taxa_heatmap.png", # Output file name
+  plot = bmi_consensus_hm, # The plot to save
+  width = 10, # Width in inches
+  height = 8, # Height in inches
+  dpi = 300,  # Resolution (dots per inch)
+  bg = "white") # Set background
+
+bmi_consensus_hm
+```
+
+```{r filter all consensus data and visualize, warning=FALSE, message=FALSE}
+# load all_consensus file
+all_consensus <- read_csv("../input_files/cross_parameter_consensus.csv") %>%
+  mutate(comparison2 = 
+           paste(comparison, parameter, sep = "_")) %>%
+  mutate(direction_of_change = if_else(coefficient < 0, "-", "+"))
+
+write_csv(all_consensus,
+          "../output_files/all_consensus.csv")
+
+
+# all comparisons as a factor
+all_consensus <- all_consensus %>%
+  mutate(
+    comparison = factor(comparison2, levels = c("Elevated_vs_Normal_bp", 
+                                               "Stage 1_vs_Normal_bp", 
+                                               "Stage 2_vs_Normal_bp",
+                                               "Stage 1_vs_Elevated_bp",
+                                               "Stage 2_vs_Elevated_bp",
+                                               "Stage 2_vs_Stage 1_bp",
+                                               "RHI Dysfunction_vs_RHI Normal_rhi",
+                                               "Above Optimal_vs_Normal_ldl", 
+                                               "Borderline High_vs_Normal_ldl", 
+                                               "High_vs_Normal_ldl", 
+                                               "Borderline High_vs_Above Optimal_ldl",
+                                               "High_vs_Above Optimal_ldl",
+                                               "High_vs_Borderline High_ldl",
+                                               "Borderline High_vs_Desirable_tc", 
+                                               "High_vs_Desirable_tc", 
+                                               "High_vs_Borderline High_tc",
+                                               "Overweight_vs_Normal_bmi", 
+                                               "Obese_vs_Normal_bmi", 
+                                               "Obese_vs_Overweight_bmi")))
+
+# Create the heatmap
+all_consensus_hm <- ggplot(all_consensus, 
+                          aes(x = comparison, y = taxon, fill = method_count)) +
+  geom_tile(color = "black", size = 0.5) + # Add black borders around every tile
+  geom_tile(data = expand.grid(
+    comparison = unique(all_consensus$comparison),
+    taxon = unique(all_consensus$taxon)), 
+    aes(x = comparison, y = taxon), 
+    fill = NA, color = "black", size = 0.5) + # Add a grid for all spaces (consistent size)
+  geom_text(aes(label = direction_of_change), size = 5, color = "black") +
+  scale_fill_gradient(
+    low = "blue", high = "red", name = "Method Count",
+    limits = c(0, 4), # Adjust scale range as needed
+    breaks = seq(0, 4, by = 1)) + # Customize legend ticks
+  labs(
+    title = "Differential Abundance Consensus Taxa",
+    x = "Comparison",
+    y = "Taxon") +
+  theme_minimal() + # Use a clean theme
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x-axis labels
+    axis.text.y = element_text(size = 8), # Adjust y-axis text size
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5), # Enhance title
+    panel.grid = element_blank(), # Remove default gridlines
+    panel.border = element_blank()) + # Remove panel border (already clean)
+  coord_fixed() # Ensure square tiles and proper alignment
+
+# Save the heatmap as a PNG file
+ggsave(
+  filename = "../output_files/all_consensus_taxa_heatmap.png", # Output file name
+  plot = all_consensus_hm, # The plot to save
+  width = 15, # Width in inches
+  height = 15, # Height in inches
+  dpi = 300,  # Resolution (dots per inch)
+  bg = "white") # Set background
+
+all_consensus_hm
+```
+
+```{r filter all consensus data for taxa in multiple comparisons and visualize, warning=FALSE, message=FALSE}
+# filter for taxa appearing in multiple comparisons
+taxa_multi <- all_consensus %>%
+  group_by(taxon) %>%
+  summarise(n_comparisons = n_distinct(comparison2)) %>%
+  filter(n_comparisons > 1)
+
+# keep only those taxa and add direction_of_change column
+all_consensus_filtered <- all_consensus %>%
+  filter(taxon %in% taxa_multi$taxon)
+
+write_csv(all_consensus_filtered,
+          "../output_files/all_consensus_filtered.csv")
+
+# verify taxa kept
+cat("Number of taxa retained:", n_distinct(all_consensus_filtered$taxon), "\n")
+
+# Create the heatmap
+all_consensus_hm_filtered <- ggplot(all_consensus_filtered, 
+                          aes(x = comparison, y = taxon, fill = method_count)) +
+  geom_tile(color = "black", size = 0.5) + # Add black borders around every tile
+  geom_tile(data = expand.grid(
+    comparison = unique(all_consensus_filtered$comparison),
+    taxon = unique(all_consensus_filtered$taxon)), 
+    aes(x = comparison, y = taxon), 
+    fill = NA, color = "black", size = 0.5) + # Add a grid for all spaces (consistent size)
+  geom_text(aes(label = direction_of_change), size = 7, color = "black") +
+  scale_fill_gradient(
+    low = "blue", high = "red", name = "Method Count",
+    limits = c(0, 4), # Adjust scale range as needed
+    breaks = seq(0, 4, by = 1)) + # Customize legend ticks
+  labs(
+    title = "Differential Abundance Consensus Taxa",
+    x = "Comparison",
+    y = "Taxon") +
+  theme_minimal() + # Use a clean theme
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x-axis labels
+    axis.text.y = element_text(size = 8), # Adjust y-axis text size
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5), # Enhance title
+    panel.grid = element_blank(), # Remove default gridlines
+    panel.border = element_blank()) + # Remove panel border (already clean)
+  coord_fixed() # Ensure square tiles and proper alignment
+
+# Save the heatmap as a PNG file
+ggsave(
+  filename = "../output_files/all_consensus_taxa_heatmap_filtered.png", # Output file name
+  plot = all_consensus_hm_filtered, # The plot to save
+  width = 15, # Width in inches
+  height = 15, # Height in inches
+  dpi = 300,  # Resolution (dots per inch)
+  bg = "white") # Set background
+
+all_consensus_hm_filtered
+
+```
